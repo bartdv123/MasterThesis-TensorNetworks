@@ -30,7 +30,7 @@ adjacency matrix like structure
 """
 
 mutable struct GameEnv <: GI.AbstractGameEnv                                    # Create a mutable strucutre -> this is updated during gameplay
-    graph::SimpleGraph{Int64}                                                                      # Pass the current graph structure into the GameEnv
+    graph::SimpleGraph{Int64}                                                   # Pass the current graph structure into the GameEnv
     game_board_laplacian::Matrix{Int64}                                         # Defining the types to have fast and good code
     sized_adjacency::Matrix{Int64}                                              # Sizes of the edges inside an adjecancy matrix
     adj::Matrix{Int64}                                                          # Way for quick graph visualisation during gameplay
@@ -98,7 +98,7 @@ end
 
 
 GI.two_players(::GameSpec) = false                                              # It's a single player game!
-GI.actions(::GameSpec) = collect(1:7)
+GI.actions(::GameSpec) = collect(1:7)                                           # 7 loops in a frucht graph
 
 history(env::GameEnv) = env.history                                             
 
