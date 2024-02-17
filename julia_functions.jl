@@ -16,7 +16,11 @@ Makie.inline!(true)
 
 """
 Julia file with all the relevant functions which can be reused in different
-codes by added them with the include("julia_functions.jl") command.
+codes by added them with the:
+
+include("julia_functions.jl")
+
+command.
 Make sure to copy this file to the correct directory beforehand.
 """
 
