@@ -14,6 +14,13 @@ using Combinatorics
 using LaTeXStrings
 Makie.inline!(true)
 
+"""
+Julia file with all the relevant functions which can be reused in different
+codes by added them with the include("julia_functions.jl") command.
+Make sure to copy this file to the correct directory beforehand.
+"""
+
+
 # This file will contain some nice and importable functions which allows one to work inside of a notebook without all cluttered workspace
 # Main big functions -> these functions use some functionality from the smaller helper functions below
 function truncated_SVD_replacement(tn, index, bondsize, printing=false)
