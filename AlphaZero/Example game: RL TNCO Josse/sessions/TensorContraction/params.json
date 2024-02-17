@@ -1,0 +1,79 @@
+{
+    "self_play": {
+        "mcts": {
+            "gamma": 1,
+            "cpuct": 1,
+            "num_iters_per_turn": 50,
+            "temperature": {
+                "value": 0
+            },
+            "dirichlet_noise_ϵ": 0,
+            "dirichlet_noise_α": 1,
+            "prior_temperature": 1
+        },
+        "sim": {
+            "num_games": 5000,
+            "num_workers": 1,
+            "batch_size": 1,
+            "use_gpu": true,
+            "fill_batches": true,
+            "reset_every": 1,
+            "flip_probability": 0,
+            "alternate_colors": false
+        }
+    },
+    "memory_analysis": null,
+    "learning": {
+        "use_gpu": true,
+        "use_position_averaging": true,
+        "samples_weighing_policy": "LOG_WEIGHT",
+        "optimiser": {
+            "lr": 0.002
+        },
+        "l2_regularization": 0.0001,
+        "rewards_renormalization": 1,
+        "nonvalidity_penalty": 1,
+        "batch_size": 2,
+        "loss_computation_batch_size": 2,
+        "min_checkpoints_per_epoch": 1,
+        "max_batches_per_checkpoint": 2000,
+        "num_checkpoints": 1
+    },
+    "arena": {
+        "mcts": {
+            "gamma": 1,
+            "cpuct": 1,
+            "num_iters_per_turn": 50,
+            "temperature": {
+                "value": 0.2
+            },
+            "dirichlet_noise_ϵ": 0.05,
+            "dirichlet_noise_α": 1,
+            "prior_temperature": 1
+        },
+        "sim": {
+            "num_games": 128,
+            "num_workers": 1,
+            "batch_size": 1,
+            "use_gpu": true,
+            "fill_batches": true,
+            "reset_every": 1,
+            "flip_probability": 0,
+            "alternate_colors": false
+        },
+        "update_threshold": 0.05
+    },
+    "num_iters": 1,
+    "use_symmetries": false,
+    "ternary_outcome": false,
+    "mem_buffer_size": {
+        "xs": [
+            0,
+            15
+        ],
+        "ys": [
+            400000,
+            1000000
+        ]
+    }
+}

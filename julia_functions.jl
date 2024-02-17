@@ -510,7 +510,95 @@ function generate_combinations(full_edge_list, length)
 end
 
 
+function fill_with_random(G, dims, visualisation = false)
+
+    """
+    Function which takes in a Graphs.jl graph-structure (G) and which generates a Tenet.TensorNetwork based on the connectivity of the network.
+    First of all each node is filled with a random tensor, the dims arguement shows the size of each index. Other more complex fill options can be added later down the line
+    """
+    
+    nvertices = nv(G) # number of vertices
+    nedges = ne(G)    # number of edges
+
+    nodes = [node for node in vertices(G)]
+    edgesgraph = [edge for edge in edges(G)]
+    edges_labels = [Symbol(edge) for edge in 1:nedges]
+    edges_map = Dict(zip(edgesgraph, edges_labels))
+
+    if visualisation == true
+        display(gplot(G, nodelabel=nodes, nodefillc=colorant"springgreen3", layout=spring_layout))
+    end
 
 
+    tensors = []
+    # Generating the tensors inside of the network
+    for source in vertices(G)
+        inds = Tuple([edges_map[edge] for edge in edges(G) if source in([src(edge), dst(edge)])])
+        size_generation_tuple = Tuple([dims for i in 1:length(inds)])
+        push!(tensors, Tensor(rand(size_generation_tuple...), inds))
+        
+    end
 
+    TN = TensorNetwork(tensors)
+    return TN
+
+end
+
+
+function extract_graph_representation(TN, printing=false)
+
+    """
+    Function which takes in a TensorNetwork from Tenet.jl, this network only has one edge between two tensors (grouped indices) and no self loops.
+    Based on the connectivity inside of the TensorNetwork a simple graph structure is generated.
+    For this mapping a dictionary which has vertex labels as keys and corresponding tensors as values is generated.
+    For this mapping a dictionary which has the corresponding edge as keys and as values the corresponding tensors indices.
+    """
+
+    n_vertices = length(tensors(TN))
+    n_edges =  [[inds(tensor)...] for tensor in tensors(TN)]
+    to_set = []
+    for group in n_edges
+        for element in group
+            push!(to_set, element)
+        end
+    end
+    n_edges = length(Set(to_set))
+    
+    if printing == true
+        println("Amount of extracted vertices = ", n_vertices, "\nAmount of extracted edges = ", n_edges)
+    end
+
+    list_of_edges = collect((Set(to_set)))
+    tensor_vertex_map = Dict{Int, Tenet.Tensor}()  # Specify the type of the keys and values
+    for (i, tensor) in enumerate(tensors(TN))
+        tensor_vertex_map[Int(i)] = tensor
+    end
+    println(tensor_vertex_map)
+
+    g = SimpleGraph(n_vertices)
+    nodes = [node for node in vertices(g)]
+
+    # the connectivty inside of the tensor network should be mapped onto the connectivty of the SimpleGraph
+    index_edge_map = Dict{}()
+    pairs = collect(combinations([node for node in vertices(g)], 2))
+    println(pairs)
+    for possible_connection in pairs
+        v1 = possible_connection[1]
+        v2 = possible_connection[2]
+        T_v1 = tensor_vertex_map[v1]
+        T_v2 = tensor_vertex_map[v2]
+        # connectivity measure
+        index_intersection =  intersect(inds(T_v1), inds(T_v2))
+        if length(index_intersection) == 1
+            add_edge!(g, v1, v2)
+            edge = [edge for edge in edges(g) if [src(edge), dst(edge)] == possible_connection][1]
+            index_edge_map[index_intersection] = edge
+        end
+    end
+    display(gplot(g, nodelabel=[node for node in vertices(g)]))
+    println(index_edge_map)
+
+    return g, tensor_vertex_map, index_edge_map
+
+end
 
