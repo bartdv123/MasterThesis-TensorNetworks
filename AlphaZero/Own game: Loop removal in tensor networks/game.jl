@@ -53,7 +53,7 @@ function GI.init(::GameSpec)
 
     dimension = 3                                                                   # Update this to allow sized adjacency extraction
     G = Graphs.smallgraph(:frucht)
-    TN = fill_with_random(G, dimension, true)
+    TN = fill_with_random(G, dimension, false)
 
     graph, tv_map, ie_map = extract_graph_representation(TN, false) # Extract the graphs.jl structure from the Tenet.TensorNetwork
     laplacian = laplacian_matrix(graph)
@@ -118,10 +118,16 @@ GI.actions_mask(env::GameEnv) = env.action_mask
 # Update the game status                                                        # Perform an action              
 function update_status!(env::GameEnv, action)
     
-    update_actions_mask!(env, action)
+    update_action_mask!(env, action)
     env.finished = !any(env.action_mask)
 
     true
+end
+
+function extract_edges_from_cycle(cycle)
+    pairs = [(cycle[i], cycle[i+1]) for i in 1:length(cycle)-1]
+    push!(pairs, (cycle[end], cycle[1]))
+    return pairs
 end
 
 
@@ -129,11 +135,28 @@ function GI.play!(env::GameEnv, action)
     """
     What should happen in the game state when the agent takes an action
     """
-
+    println(env.cycles_list)
     #TODO: Implement the possibility of updating the state spaces when
-    # performing an action. 
+    # performing an action.
 
+    isnothing(env.history) || push!(env.history, action)                        
+    update_status!(env, action)
 
+    cycle = env.cycles_list[action]
+    possible_bonds = extract_edges_from_cycle(cycle)
+    edge_to_cut = rand(possible_bond)                                           # parametrize this better
+
+    #TODO: dictionary of bond dimensions -> as cost use the broken bond dimension
+
+    rem_edge!(env.graph, edge_to_cut[1], edge_to_cut[2])                        # remove the edge from the structure
+
+    # update the representations
+    env.game_board_laplacian = laplacian_matrix(env.graph)
+    env.sized_adjacency = dimension*adjacency_matrix(env.graph)
+    env.adj = adjacency_matrix(env.graph)
+    env.num_loops = length(cycle_basis(env.graph))
+    env.cycles_list = cycle_basis(env.graph)
+    env.finished = is_tree(env.graph)
 
 
     """
@@ -179,7 +202,7 @@ end
 
 
 
-function GI.render(env::GameEnv, visualisation = true)
+function GI.render(env::GameEnv, visualisation = false)
 
 `   """
     What should happen when rendering a game environment
