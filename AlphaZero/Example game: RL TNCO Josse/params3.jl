@@ -99,4 +99,5 @@ benchmark = [
     Benchmark.Single(
         Benchmark.NetworkOnly(),
         benchmark_sim)]
+        
 experiment = AlphaZero.Experiment("TensorContraction", GameSpec(), params, Network, netparams, benchmark)
