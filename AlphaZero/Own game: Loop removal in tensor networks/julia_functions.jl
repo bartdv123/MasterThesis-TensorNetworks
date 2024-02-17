@@ -580,7 +580,6 @@ function extract_graph_representation(TN, printing=false)
     for (i, tensor) in enumerate(tensors(TN))
         tensor_vertex_map[Int(i)] = tensor
     end
-    println(tensor_vertex_map)
 
     g = SimpleGraph(n_vertices)
     nodes = [node for node in vertices(g)]
@@ -588,7 +587,7 @@ function extract_graph_representation(TN, printing=false)
     # the connectivty inside of the tensor network should be mapped onto the connectivty of the SimpleGraph
     index_edge_map = Dict{}()
     pairs = collect(combinations([node for node in vertices(g)], 2))
-    println(pairs)
+    
     for possible_connection in pairs
         v1 = possible_connection[1]
         v2 = possible_connection[2]
@@ -602,8 +601,7 @@ function extract_graph_representation(TN, printing=false)
             index_edge_map[index_intersection] = edge
         end
     end
-    display(gplot(g, nodelabel=[node for node in vertices(g)]))
-    println(index_edge_map)
+    
 
     return g, tensor_vertex_map, index_edge_map
 

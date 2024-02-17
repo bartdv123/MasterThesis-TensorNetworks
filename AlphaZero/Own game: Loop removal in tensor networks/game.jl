@@ -14,10 +14,6 @@ Part to create a Tenet.TensorNetwork to try and play a game on
 
 #TODO: Fill function where bondsize is randomized and sampled from a distribution. 
 
-dimension = 3                                                                   # Update this to allow sized adjacency extraction
-G = Graphs.smallgraph(:frucht)
-tn1 = fill_with_random(G, dimension, true)
-
 
 """
 Setting up a game environment and game structure -> try to do initial play and
@@ -34,9 +30,10 @@ adjacency matrix like structure
 """
 
 mutable struct GameEnv <: GI.AbstractGameEnv                                    # Create a mutable strucutre -> this is updated during gameplay
+    graph::SimpleGraph{Int64}                                                                      # Pass the current graph structure into the GameEnv
     game_board_laplacian::Matrix{Int64}                                         # Defining the types to have fast and good code
     sized_adjacency::Matrix{Int64}                                              # Sizes of the edges inside an adjecancy matrix
-    adjacency_matrix::Matrix{Int64}                                                    # Way for quick graph visualisation during gameplay
+    adj::Matrix{Int64}                                                          # Way for quick graph visualisation during gameplay
     num_loops::Int64                                                            # Amount of loops in the network
     cycles_list::Vector{Vector{Int64}}                                          # The specific list of cycles which are present in the network                                                               # The definitions of the simple cycles
     reward_list::Array{Int64}                                                   # The rewards the agent got for the choices it made during the gameplay
@@ -48,28 +45,33 @@ end
 
 GI.spec(::GameEnv) = GameSpec()
 
-function GI.init(::GameSpec, TN::Tenet.TensorNetwork)                           
+function GI.init(::GameSpec)                           
     """
     Initialisation of a game environment is done by extracting the relevant data
     from the graph representation of a Tenet.TensorNetwork
     """
 
-    graph, tensor_vertex_map, index_edge_map = extract_graph_representation(TN) # Extract the graphs.jl structure from the Tenet.TensorNetwork
+    dimension = 3                                                                   # Update this to allow sized adjacency extraction
+    G = Graphs.smallgraph(:frucht)
+    TN = fill_with_random(G, dimension, true)
+
+    graph, tv_map, ie_map = extract_graph_representation(TN, false) # Extract the graphs.jl structure from the Tenet.TensorNetwork
     laplacian = laplacian_matrix(graph)
     sized_connections = dimension*adjacency_matrix(graph)
-    adjacency_matrix = adjacency_matrix(graph)
+    adj = adjacency_matrix(graph)
     num_loops = length(cycle_basis(graph))
     cycles_list = cycle_basis(graph)
     history = Int[]
 
-    return GameEnv(laplacian, sized_connections, adjacency_matrix, num_loops, cycles_list, Int64[], trues(num_loops), false, history)
+    return GameEnv(graph, laplacian, sized_connections, adj, num_loops, cycles_list, Int64[], trues(num_loops), false, history)
 end
 
 function GI.set_state!(env::GameEnv, state)
     #print("\n \n set state \n \n")
+    env.graph = state.graph
     env.game_board_laplacian = state.game_board_laplacian
     env.sized_adjacency = state.sized_adjacency
-    env.adjacency_matrix = state.adjacency_matrix
+    env.adj = state.adj
     env.num_loops = state.num_loops
     env.cycles_list = state.cycles_list
     env.reward_list = state.reward_list
@@ -88,18 +90,15 @@ and must therefore either be fresh or persistent. If in doubt, you should make a
 function GI.clone(env::GameEnv)
     #print("\n \n CLONED \n \n")
     history = isnothing(env.history) ? nothing : copy(env.history)
-    return GameEnv(copy(env.game_board_laplacian), copy(env.sized_connections), 
-    copy(env.adjacency_matrix), copy(env.num_loops), copy(env.cycles_list), 
+    return GameEnv(copy(env.graph), copy(env.game_board_laplacian), copy(env.sized_adjacency), 
+    copy(env.adj), copy(env.num_loops), copy(env.cycles_list), 
     copy(env.reward_list), copy(env.action_mask), 
     copy(env.finished), copy(env.history))
 end
 
 
 GI.two_players(::GameSpec) = false                                              # It's a single player game!
- 
-
-GI.actions(::GameSpec) = collect(1:num_loops)                                   # Actions possible to the agent, ie. select an edge for cutting
-
+GI.actions(::GameSpec) = collect(1:7)
 
 history(env::GameEnv) = env.history                                             
 
@@ -120,7 +119,7 @@ GI.actions_mask(env::GameEnv) = env.action_mask
 function update_status!(env::GameEnv, action)
     
     update_actions_mask!(env, action)
-    env.finished = !any(env.amask)
+    env.finished = !any(env.action_mask)
 
     true
 end
@@ -150,9 +149,10 @@ end
 
 # Some more neccesary implementations
 
-GI.current_state(env::GameEnv) = (game_board_laplacian = copy(env.game_board_laplacian), 
+GI.current_state(env::GameEnv) = (graph = copy(env.graph), 
+    game_board_laplacian = copy(env.game_board_laplacian), 
     sized_adjacency = copy(env.sized_adjacency), 
-    adjacency_matrix= copy(env.adjacency_matrix), 
+    adj= copy(env.adj), 
     num_loops = copy(env.num_loops), 
     cycles_list = copy(env.cycles_list), 
     reward_list = copy(env.reward_list), 
@@ -167,7 +167,7 @@ function GI.game_terminated(env::GameEnv)
 end
 
 function GI.vectorize_state(::GameSpec, state)
-    return convert(Array{Float32}, cat(state.game_board_laplacian, state.sized_adjacency, dims =3))
+    return convert(Array{Float32}, cat(state.game_board_laplacian, state.sized_adjacency, state.adj, dims =3))
 end 
 
 function GI.white_reward(env::GameEnv)
@@ -189,7 +189,7 @@ function GI.render(env::GameEnv, visualisation = true)
     display(env.game_board_laplacian)
 
     if visualisation == true
-        current_graph_representation = SimpleGraph(env.adjacency_matrix)
+        current_graph_representation = env.graph
         nodes = [node for node in vertices(current_graph_representation)]
         display(gplot(current_graph_representation, nodelabel=nodes, nodefillc=colorant"springgreen3", layout=spring_layout))
     end
@@ -204,9 +204,4 @@ function GI.render(env::GameEnv, visualisation = true)
 end
 
     
-
-
-
-
-
 
