@@ -8,6 +8,11 @@ include("julia_functions.jl")                                                   
 
 
 """
+Version 01 without updates with weights and edge list Booleans
+"""
+
+
+"""
 Part to create a Tenet.TensorNetwork to try and play a game on
 --> Initial testing using the Frucht graph structure with all bond dimensions 3
 """

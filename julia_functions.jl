@@ -16,11 +16,7 @@ Makie.inline!(true)
 
 """
 Julia file with all the relevant functions which can be reused in different
-codes by added them with the:
-
-include("julia_functions.jl")
-
-command.
+codes by added them with the include("julia_functions.jl") command.
 Make sure to copy this file to the correct directory beforehand.
 """
 
@@ -521,11 +517,12 @@ function generate_combinations(full_edge_list, length)
 end
 
 
-function fill_with_random(G, dims, visualisation = false)
+function fill_with_random(G, dims, visualisation = false, fixed_dim = true)
 
     """
     Function which takes in a Graphs.jl graph-structure (G) and which generates a Tenet.TensorNetwork based on the connectivity of the network.
-    First of all each node is filled with a random tensor, the dims arguement shows the size of each index. Other more complex fill options can be added later down the line
+    First of all each node is filled with a random tensor, the dims arguement shows the size of each index.
+    If the dims argument is passed an [lowest_dim, highest_dim] argument each index size is randomly choosen from this range 
     """
     
     nvertices = nv(G) # number of vertices
@@ -545,7 +542,12 @@ function fill_with_random(G, dims, visualisation = false)
     # Generating the tensors inside of the network
     for source in vertices(G)
         inds = Tuple([edges_map[edge] for edge in edges(G) if source in([src(edge), dst(edge)])])
-        size_generation_tuple = Tuple([dims for i in 1:length(inds)])
+        if fixed_dim == true
+            size_generation_tuple = Tuple([dims for i in 1:length(inds)])
+        end
+        if fixed_dim == false
+            size_generation_tuple = Tuple([rand(dims[1]:dims[2]) for i in 1:length(inds)])
+        end
         push!(tensors, Tensor(rand(size_generation_tuple...), inds))
         
     end
@@ -555,7 +557,6 @@ function fill_with_random(G, dims, visualisation = false)
 
 end
 
-
 function extract_graph_representation(TN, printing=false)
 
     """
@@ -563,6 +564,8 @@ function extract_graph_representation(TN, printing=false)
     Based on the connectivity inside of the TensorNetwork a simple graph structure is generated.
     For this mapping a dictionary which has vertex labels as keys and corresponding tensors as values is generated.
     For this mapping a dictionary which has the corresponding edge as keys and as values the corresponding tensors indices.
+    A fully weighted edge list is generated [[source, drain, size], ...]
+    An edge to index map is generated Dict[(source, drain)] -> Tensor network index
     """
 
     n_vertices = length(tensors(TN))
@@ -584,15 +587,21 @@ function extract_graph_representation(TN, printing=false)
     for (i, tensor) in enumerate(tensors(TN))
         tensor_vertex_map[Int(i)] = tensor
     end
-    println(tensor_vertex_map)
+
+    if printing == true
+        println(tensor_vertex_map)
+    end
 
     g = SimpleGraph(n_vertices)
     nodes = [node for node in vertices(g)]
 
     # the connectivty inside of the tensor network should be mapped onto the connectivty of the SimpleGraph
     index_edge_map = Dict{}()
+
+    fully_weighted_edge_list = []                                               # generate a list containing the weighted edges [source, drain, size]
+    edge_index_map = Dict{}()                                                   # dictionary which maps (source, drain) tuples to tensor network indices
+
     pairs = collect(combinations([node for node in vertices(g)], 2))
-    println(pairs)
     for possible_connection in pairs
         v1 = possible_connection[1]
         v2 = possible_connection[2]
@@ -604,12 +613,47 @@ function extract_graph_representation(TN, printing=false)
             add_edge!(g, v1, v2)
             edge = [edge for edge in edges(g) if [src(edge), dst(edge)] == possible_connection][1]
             index_edge_map[index_intersection] = edge
+            push!(fully_weighted_edge_list, Array([v1, v2, size(TN, index_intersection[1])]))
+            edge_index_map[(v1,v2)] = index_intersection
         end
     end
-    display(gplot(g, nodelabel=[node for node in vertices(g)]))
-    println(index_edge_map)
 
-    return g, tensor_vertex_map, index_edge_map
+    if printing == true
+        display(gplot(g, nodelabel=[node for node in vertices(g)]))
+        println(index_edge_map)
+    end
+
+    return g, tensor_vertex_map, index_edge_map, fully_weighted_edge_list, edge_index_map
 
 end
+
+
+
+function sized_adj_from_weightededges(fully_weighted_edge_list, graph)
+
+    """
+    Function which takes in the fully weighted edge list [[source, drain, size], ...]
+    and the current graph representation in gives the corrseponding sized adj_matrix.
+    """
+
+
+
+    num_vertices = nv(graph)
+
+    # Initialize a sized adjacency matrix with zeros
+    sized_adj_matrix = zeros(Int, num_vertices, num_vertices)
+
+    # Add edges to the adjacency matrix with specified sizes
+    for weighted_edge in fully_weighted_edge_list
+        u = weighted_edge[1]
+        v = weighted_edge[2]
+        size = weighted_edge[3]
+        # Modify the matrix
+        sized_adj_matrix[u, v] = size
+        sized_adj_matrix[v, u] = size  # Add reverse edge to ensure symmetry
+    end
+
+    return sized_adj_matrix
+end 
+
 

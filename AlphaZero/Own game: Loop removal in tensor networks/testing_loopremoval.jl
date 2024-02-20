@@ -6,7 +6,7 @@ using GraphPlot                                                                 
 
 
 include("julia_functions.jl")                                                   # Paste a copy of julia_functions.jl inside of the directory
-include("game.jl")
+include("game_v2.jl")
 include("params.jl")
 
 
