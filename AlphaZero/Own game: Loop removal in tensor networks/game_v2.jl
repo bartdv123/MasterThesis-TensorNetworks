@@ -36,13 +36,11 @@ adjacency matrix like structure
 
 mutable struct GameEnv <: GI.AbstractGameEnv                                    # Create a mutable strucutre -> this is updated during gameplay
     graph::SimpleGraph{Int64}                                                   # Pass the current graph structure into the GameEnv
-    game_board_laplacian::Matrix{Int64}                                         # Defining the types to have fast and good code
+    weighted_edge_list                                                          # List of edges and dimensionality [[source, drain, size], ...]
+    boolean_edge_availability::BitVector                                        # List with boolean_edge_availability -> ie. is the edge part of a simple cycle or not: true/false
     sized_adjacency::Matrix{Int64}                                              # Sizes of the edges inside an adjecancy matrix
-    adj::Matrix{Int64}                                                          # Way for quick graph visualisation during gameplay
-    num_loops::Int64                                                            # Amount of loops in the network
-    cycles_list::Vector{Vector{Int64}}                                          # The specific list of cycles which are present in the network                                                               # The definitions of the simple cycles
     reward_list::Array{Int64}                                                   # The rewards the agent got for the choices it made during the gameplay
-    action_mask::BitVector # BitVector is specialized type to use Booleans      # After cutting a loop inside of the network, the actions of cutting this loop in a different way should be masked out                             
+    amask::BitVector                                                            # Used by external solvers to interpret game position -> same as boolean_edge_availability
     finished::Bool                                                              # Boolean to represent if the game is finished
     history:: Union{Nothing, Vector}                                            # History of actions
 
@@ -56,19 +54,16 @@ function GI.init(::GameSpec)
     from the graph representation of a Tenet.TensorNetwork
     """
 
-    dimension = 3                                                                   # Update this to allow sized adjacency extraction
+    dimension = [2,10]                                                              # Update this to allow sized adjacency extraction
     G = Graphs.smallgraph(:frucht)
-    TN = fill_with_random(G, dimension, false)
+    TN = fill_with_random(G, [2,10], false, false)
 
-    graph, tv_map, ie_map = extract_graph_representation(TN, false) # Extract the graphs.jl structure from the Tenet.TensorNetwork
-    laplacian = laplacian_matrix(graph)
-    sized_connections = dimension*adjacency_matrix(graph)
-    adj = adjacency_matrix(graph)
-    num_loops = length(cycle_basis(graph))
-    cycles_list = cycle_basis(graph)
+    graph, tv_map, ie_map, fully_weighted_edge_list, ei_map = extract_graph_representation(TN, false) # Extract the graphs.jl structure from the Tenet.TensorNetwork
+    sized_connections = sized_adj_from_weightededges(fully_weighted_edge_list, graph)
+    
     history = Int[]
 
-    return GameEnv(graph, laplacian, sized_connections, adj, num_loops, cycles_list, Int64[], trues(num_loops), false, history)
+    return GameEnv(graph, fully_weighted_edge_list, sized_connections, Int64[], trues(num_loops), false, history)
 end
 
 function GI.set_state!(env::GameEnv, state)

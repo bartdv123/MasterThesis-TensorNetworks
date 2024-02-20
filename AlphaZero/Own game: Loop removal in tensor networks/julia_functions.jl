@@ -636,8 +636,6 @@ function sized_adj_from_weightededges(fully_weighted_edge_list, graph)
     and the current graph representation in gives the corrseponding sized adj_matrix.
     """
 
-
-
     num_vertices = nv(graph)
 
     # Initialize a sized adjacency matrix with zeros
@@ -657,3 +655,98 @@ function sized_adj_from_weightededges(fully_weighted_edge_list, graph)
 end 
 
 
+function cycle_basis_to_edges(cycle_basis)
+
+    edges = []
+
+    for cycle in cycle_basis
+        # extract the edges from the current cycle
+        c_edges = [[cycle[i], cycle[i+1]] for i in 1:length(cycle)-1]
+        push!(c_edges, [cycle[end], cycle[1]])
+        # add the sorted edge to the edges if not already inside of edges
+        for edge in c_edgesfunction cycle_basis_to_edges(cycle_basis)
+
+            edges = []
+        
+            for cycle in cycle_basis
+                # extract the edges from the current cycle
+                c_edges = [[cycle[i], cycle[i+1]] for i in 1:length(cycle)-1]
+                push!(c_edges, [cycle[end], cycle[1]])
+                # add the sorted edge to the edges if not already inside of edges
+                for edge in c_edges
+                    if sort(edge) in edges                                              
+                        continue
+                    end
+                    push!(edges, sort(edge))
+                end
+            end
+           
+            return sort(edges)
+        end
+        
+        
+        function update_edge_availability(graph, fully_weighted_edge_list, boolean_edge_availability)
+        
+            """
+            Function which takes in a freshly modified Graphs.jl structure, 
+            a fully_weighted_edge_list, a current boolean_edge_availability list and
+            this functions updates the boolean_edge_availability list based on the
+            current graph structure (after removing an edge)
+            """
+        
+            # Get the cycle_basis of the graph which represent all the simple cycles
+            cycles = cycle_basis(graph)
+            cycle_edges = cycle_basis_to_edges(cycles)                                  # extract a list of the possible available [source, drain] combinations
+        
+            # For each list in the fully_weighted_edge_list 
+            # update the boolean_edge_availability list based on if this specific edge
+            # is inside of the cycle_edges
+            for (i, edge_weight) in enumerate(fully_weighted_edge_list)
+                edge = edge_weight[1:2]
+                if edge ∈ cycle_edges
+                    boolean_edge_availability[i] = true
+                else
+                    boolean_edge_availability[i] = false
+                end
+            end
+            
+            return boolean_edge_availability
+        
+        end
+        
+            push!(edges, sort(edge))
+        end
+    end
+   
+    return sort(edges)
+end
+
+
+function update_edge_availability(graph, fully_weighted_edge_list, boolean_edge_availability)
+
+    """
+    Function which takes in a freshly modified Graphs.jl structure, 
+    a fully_weighted_edge_list, a current boolean_edge_availability list and
+    this functions updates the boolean_edge_availability list based on the
+    current graph structure (after removing an edge)
+    """
+
+    # Get the cycle_basis of the graph which represent all the simple cycles
+    cycles = cycle_basis(graph)
+    cycle_edges = cycle_basis_to_edges(cycles)                                  # extract a list of the possible available [source, drain] combinations
+
+    # For each list in the fully_weighted_edge_list 
+    # update the boolean_edge_availability list based on if this specific edge
+    # is inside of the cycle_edges
+    for (i, edge_weight) in enumerate(fully_weighted_edge_list)
+        edge = edge_weight[1:2]
+        if edge ∈ cycle_edges
+            boolean_edge_availability[i] = true
+        else
+            boolean_edge_availability[i] = false
+        end
+    end
+    
+    return boolean_edge_availability
+
+end
