@@ -613,7 +613,7 @@ function extract_graph_representation(TN, printing=false)
             add_edge!(g, v1, v2)
             edge = [edge for edge in edges(g) if [src(edge), dst(edge)] == possible_connection][1]
             index_edge_map[index_intersection] = edge
-            push!(fully_weighted_edge_list, Array([v1, v2, size(TN, index_intersection[1])]))
+            push!(fully_weighted_edge_list, (v1, v2, size(TN, index_intersection[1])))
             edge_index_map[(v1,v2)] = index_intersection
         end
     end
@@ -664,10 +664,10 @@ function cycle_basis_to_edges(cycle_basis)
         push!(c_edges, [cycle[end], cycle[1]])
         # add the sorted edge to the edges if not already inside of edges
         for edge in c_edges
-            if sort(edge) in edges                                              
+            if Tuple(sort(edge)) in edges                                              
                 continue
             end
-            push!(edges, sort(edge))
+            push!(edges, Tuple(sort(edge)))
         end
     end
    
@@ -692,6 +692,7 @@ function update_edge_availability(graph, fully_weighted_edge_list, boolean_edge_
     # For each list in the fully_weighted_edge_list 
     # update the boolean_edge_availability list based on if this specific edge
     # is inside of the cycle_edges
+
     for (i, edge_weight) in enumerate(fully_weighted_edge_list)
         edge = edge_weight[1:2]
         if edge ∈ cycle_edges

@@ -51,22 +51,28 @@ function GI.init(::GameSpec)
     """
     Initialisation of a game environment is done by extracting the relevant data
     from the graph representation of a Tenet.TensorNetwork
+    Return an initialized GameEnv
     """
 
-    dimension = [2,10]                                                          # Update this to allow sized adjacency extraction
+    dimension = 3                                                               # Update this to allow sized adjacency extraction
     G = Graphs.smallgraph(:frucht)
-    TN = fill_with_random(G, dimension, false, false)
+    TN = fill_with_random(G, dimension, false, true)
 
     graph, tv_map, ie_map, fully_weighted_edge_list, ei_map = extract_graph_representation(TN, false) # Extract the graphs.jl structure from the Tenet.TensorNetwork
     sized_connections = sized_adj_from_weightededges(fully_weighted_edge_list, graph)
-    boolean_edge_availability = update_edge_availability(graph, fully_weighted_edge_list, trues(1:length(fully_weighted_edge_list)))
+    boolean_edge_availability = trues(length(fully_weighted_edge_list))
     history = Int[]
-
-    return GameEnv(graph, fully_weighted_edge_list, boolean_edge_availability, sized_connections, Int64[], boolean_edge_availability, false, history)
+    update_edge_availability
+    return GameEnv(graph, fully_weighted_edge_list, boolean_edge_availability, sized_connections, Int64[], deepcopy(boolean_edge_availability), false, history)
 end
 
 function GI.set_state!(env::GameEnv, state)
-    #print("\n \n set state \n \n")
+
+    """
+    In place modification of a state
+    => No need to copy
+    """
+
     env.graph = state.graph
     env.weighted_edge_list = state.weighted_edge_list
     env.boolean_edge_availability = state.boolean_edge_availability
@@ -75,7 +81,7 @@ function GI.set_state!(env::GameEnv, state)
     env.amask = state.amask
     env.finished = state.finished
     env.history = state.history
-    return
+
 end
 
 """
@@ -86,23 +92,31 @@ and must therefore either be fresh or persistent. If in doubt, you should make a
 
 function GI.clone(env::GameEnv)
 
-    history = isnothing(env.history) ? nothing : copy(env.history)
-    return GameEnv((env.graph), 
-    (env.weighted_edge_list), 
-    copy(env.boolean_edge_availability), 
-    (env.sized_adjacency), 
-    (env.reward_list),
-    copy(env.amask),
-    (env.finished),
-    history)
+    """
+    Return an independent copy of the given environment.
+    => should use deepcopy just to be structure
+    => add new pointers in computer memory
+    """
+
+    history = isnothing(env.history) ? nothing : deepcopy(env.history)
+    return GameEnv(deepcopy(env.graph), 
+    deepcopy(env.weighted_edge_list), 
+    deepcopy(env.boolean_edge_availability), 
+    deepcopy(env.sized_adjacency), 
+    deepcopy(env.reward_list),
+    deepcopy(env.amask),
+    deepcopy(env.finished),
+    deepcopy(history))
 
 end
 
 
 GI.two_players(::GameSpec) = false                                              # It's a single player game!
 GI.actions(::GameSpec) = collect(1:18)                                          # 18 edges in a frucht graph
-
-history(env::GameEnv) = env.history                                             
+function GI.available_actions(env::GameEnv)
+    return copy(env.amask)
+end
+history(env::GameEnv) = deepcopy(env.history)                                           
 
 
 """
@@ -113,26 +127,28 @@ What does it mean to play a game???
 function update_action_mask!(env::GameEnv, action)                              # Mask for action which are not possible anymore after performing an action
 
     """
+    An inplace modification function for the action mask
     An action is uniquely indentified and parametrized by the index inside of the boolean_edge_availability
     array. This way, performing this action corresponds to masking this specific
     action by a false inside of the amask.
     """
 
     env.amask[action] = false
+
 end
 
-GI.actions_mask(env::GameEnv) = env.amask
+GI.actions_mask(env::GameEnv) = copy(env.amask)
 
 
 # Update the game status when performing an action              
 function update_status!(env::GameEnv, action)
 
     """
-    Updates the game status after an action is performed!
+    Updates the game status INPLACE after an action is performed!
     """
 
-    env.boolean_edge_availability = update_edge_availability(env.graph, env.fully_weighted_edge_list, env.boolean_edge_availability)
-    env.amask = env.boolean_edge_availability
+    env.boolean_edge_availability = update_edge_availability(env.graph, env.weighted_edge_list, env.boolean_edge_availability)
+    env.amask = (env.boolean_edge_availability)
     update_action_mask!(env, action)
     env.finished = is_tree(env.graph)
 
@@ -177,13 +193,20 @@ end
 
 # Some more neccesary implementations
 
-GI.current_state(env::GameEnv) = GI.clone(env)
+GI.current_state(env::GameEnv) = (graph = deepcopy(env.graph), 
+weighted_edge_list = deepcopy(env.weighted_edge_list),
+boolean_edge_availability = copy(env.boolean_edge_availability),
+sized_adjacency = copy(env.sized_adjacency),
+reward_list = copy(env.reward_list),
+amask = copy(env.amask),
+finished = copy(env.finished),
+history = copy(env.history))
 
 
 
 GI.white_playing(env::GameEnv) = true
 
-GI.action_string(::GameSpec, a) = string(a)
+GI.action_string(::GameSpec, action) = string(action)
 
 
 function GI.game_terminated(env::GameEnv)
@@ -191,7 +214,7 @@ function GI.game_terminated(env::GameEnv)
 end
 
 function GI.vectorize_state(::GameSpec, state)
-    return convert(Array{Float32}, cat(state.sized_adjacency, state.sized_adjacency, dims =3))
+    return convert(Array{Float32}, cat(deepcopy(state.sized_adjacency), dims =3))
 end 
 
 function GI.white_reward(env::GameEnv)
@@ -203,7 +226,7 @@ end
 
 
 
-function GI.render(env::GameEnv, visualisation = false)
+function GI.render(env::GameEnv, visualisation = true)
 
 `   """
     What should happen when rendering a game environment
@@ -226,4 +249,6 @@ function GI.render(env::GameEnv, visualisation = false)
 end
 
     
+
+### TESTING THE GAME INTERFACE IMPLEMENTATION
 
