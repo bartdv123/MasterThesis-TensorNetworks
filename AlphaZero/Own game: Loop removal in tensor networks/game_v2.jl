@@ -62,8 +62,8 @@ function GI.init(::GameSpec)
     sized_connections = sized_adj_from_weightededges(fully_weighted_edge_list, graph)
     boolean_edge_availability = trues(length(fully_weighted_edge_list))
     history = Int[]
-    update_edge_availability
-    return GameEnv(graph, fully_weighted_edge_list, boolean_edge_availability, sized_connections, Int64[], deepcopy(boolean_edge_availability), false, history)
+    boolean_edge_availability = update_edge_availability(graph, fully_weighted_edge_list, boolean_edge_availability)
+    return GameEnv(graph, fully_weighted_edge_list, boolean_edge_availability, sized_connections, Int64[], (boolean_edge_availability), false, history)
 end
 
 function GI.set_state!(env::GameEnv, state)
@@ -111,12 +111,23 @@ function GI.clone(env::GameEnv)
 end
 
 
-GI.two_players(::GameSpec) = false                                              # It's a single player game!
+GI.two_players(::GameSpec) = false
+
 GI.actions(::GameSpec) = collect(1:18)                                          # 18 edges in a frucht graph
+                                         
 function GI.available_actions(env::GameEnv)
-    return copy(env.amask)
+    indices = Int[]
+    #env.boolean_edge_availability = update_edge_availability(env.graph, env.weighted_edge_list, env.boolean_edge_availability)
+
+    for i in eachindex(env.amask)
+        if env.amask[i] == 1
+            push!(indices, i)
+        end
+    end
+    return indices 
 end
-history(env::GameEnv) = deepcopy(env.history)                                           
+
+history(env::GameEnv) = (env.history)                                           
 
 
 """
@@ -137,7 +148,7 @@ function update_action_mask!(env::GameEnv, action)                              
 
 end
 
-GI.actions_mask(env::GameEnv) = copy(env.amask)
+GI.actions_mask(env::GameEnv) = (env.amask)
 
 
 # Update the game status when performing an action              
@@ -149,8 +160,10 @@ function update_status!(env::GameEnv, action)
 
     env.boolean_edge_availability = update_edge_availability(env.graph, env.weighted_edge_list, env.boolean_edge_availability)
     env.amask = (env.boolean_edge_availability)
-    update_action_mask!(env, action)
+    #update_action_mask!(env, action)
     env.finished = is_tree(env.graph)
+    println(env.boolean_edge_availability)
+    println(env.amask)
 
 end
 
@@ -159,6 +172,7 @@ function GI.play!(env::GameEnv, action)
 
     """
     What should happen in the game state when the agent takes an action
+    -> Should happen inplace?
     """
     
     #TODO: Implement the possibility of updating the state spaces when
@@ -170,13 +184,15 @@ function GI.play!(env::GameEnv, action)
     # --> Cut this specific edge
     selected_edge = env.weighted_edge_list[action]
 
-    rem_edge!(env.graph, selected_edge[1], selected_edge[2])                    # Remove the edge from the graph structure
+    rem_edge!(env.graph, selected_edge[1], selected_edge[2])
+    
+    # Remove the edge from the graph structure
     # update the sized_adjacency matrix -> remove the edge
     env.sized_adjacency[selected_edge[1], selected_edge[2]] = 0
     env.sized_adjacency[selected_edge[2], selected_edge[1]] = 0
 
     update_status!(env, action)                                                 # updates the status of the amask, sized_adjacency, boolean_edge_availability, and game game_terminated
-
+    println("STATUS UPDATED")
 
     """
     Rewards while_playing
@@ -193,28 +209,29 @@ end
 
 # Some more neccesary implementations
 
-GI.current_state(env::GameEnv) = (graph = deepcopy(env.graph), 
-weighted_edge_list = deepcopy(env.weighted_edge_list),
-boolean_edge_availability = copy(env.boolean_edge_availability),
-sized_adjacency = copy(env.sized_adjacency),
-reward_list = copy(env.reward_list),
-amask = copy(env.amask),
-finished = copy(env.finished),
-history = copy(env.history))
+GI.current_state(env::GameEnv) = deepcopy((graph = (env.graph), 
+weighted_edge_list = (env.weighted_edge_list),
+boolean_edge_availability = (env.boolean_edge_availability),
+sized_adjacency = (env.sized_adjacency),
+reward_list = (env.reward_list),
+amask = (env.amask),
+finished = (env.finished),
+history = (env.history)))
+return "current state called"
 
 
 
 GI.white_playing(env::GameEnv) = true
 
 GI.action_string(::GameSpec, action) = string(action)
-
+GI.heuristic_value(env::GameEnv) = Float64(sum(env.reward_list))
 
 function GI.game_terminated(env::GameEnv)
-    return env.finished
+    return is_tree(env.graph)
 end
 
 function GI.vectorize_state(::GameSpec, state)
-    return convert(Array{Float32}, cat(deepcopy(state.sized_adjacency), dims =3))
+    return convert(Array{Float32}, cat((state.sized_adjacency), dims =3))
 end 
 
 function GI.white_reward(env::GameEnv)
@@ -226,7 +243,7 @@ end
 
 
 
-function GI.render(env::GameEnv, visualisation = true)
+function GI.render(env::GameEnv, visualisation = false)
 
 `   """
     What should happen when rendering a game environment
@@ -242,9 +259,9 @@ function GI.render(env::GameEnv, visualisation = true)
     end
 
     print("\n ACTION MASK \n")
-    display(env.amask)
+    println(env.amask)
     print("\n REWARD LIST: \n")
-    print(env.reward_list)
+    println(env.reward_list)
 
 end
 

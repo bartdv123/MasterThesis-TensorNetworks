@@ -1,7 +1,5 @@
 using AlphaZero
-using StaticArrays
 import AlphaZero.GI
-using Base: @kwdef
 
 
 """
@@ -136,7 +134,8 @@ end
 
 
   
-    
+GI.heuristic_value(env::GameEnv) = Float64(sum(env.reward_list))
+  
 
 
   
