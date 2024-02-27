@@ -159,7 +159,7 @@ function update_action_mask!(env::GameEnv, action)                              
 
     # Generate the current graph structure based on the adjacency matrix
     current_graph_representation = Graphs.SimpleGraphs.SimpleGraph(env.current_adjacency)
-    show = false
+    show = true
     if show == true
         nodes = [node for node in vertices(current_graph_representation)]
         display(gplot(current_graph_representation, nodelabel=nodes, nodefillc=colorant"springgreen3", layout=spring_layout))
@@ -236,7 +236,7 @@ GI.current_state(env::GameEnv) =
 sized_adjacency = (env.sized_adjacency),
 current_adjacency = deepcopy(env.current_adjacency),
 boolean_adjacency = deepcopy(env.boolean_adjacency),
-weighted_edge_list = (env.weighted_edge_list), 
+weighted_edge_list = deepcopy(env.weighted_edge_list), 
 reward_list = deepcopy(env.reward_list),
 amask = deepcopy(env.amask),
 finished = deepcopy(env.finished),
