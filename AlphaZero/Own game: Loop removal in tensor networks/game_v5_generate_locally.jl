@@ -8,7 +8,7 @@ include("julia_functions.jl")                                                   
 
 """
 Updated version 05 with locally generated graphs 
-used for logic of cycle selection
+used for the logic of cycle selection and the DMRG co
 """
 
 """
@@ -159,7 +159,7 @@ function update_action_mask!(env::GameEnv, action)                              
 
     # Generate the current graph structure based on the adjacency matrix
     current_graph_representation = Graphs.SimpleGraphs.SimpleGraph(env.current_adjacency)
-    show = true
+    show = false
     if show == true
         nodes = [node for node in vertices(current_graph_representation)]
         display(gplot(current_graph_representation, nodelabel=nodes, nodefillc=colorant"springgreen3", layout=spring_layout))
@@ -169,8 +169,9 @@ function update_action_mask!(env::GameEnv, action)                              
     env.amask = update_edge_availability(current_graph_representation, env.weighted_edge_list, env.amask)
     
     # Checking if finishing condition is reached
-    env.finished = is_tree(current_graph_representation)
-
+    if env.amask == zeros(length(env.amask))
+        env.finished = true
+    end
 end
 
 
@@ -219,7 +220,6 @@ function GI.play!(env::GameEnv, action)
     """
     Rewards while_playing
     """
-    println(length(env.reward_list))
 
     #TODO: IMPLEMENTATION OF DIFFERENT REWARD FUNCTIONS
 
@@ -234,13 +234,13 @@ GI.current_state(env::GameEnv) =
 
 (
 sized_adjacency = (env.sized_adjacency),
-current_adjacency = (env.current_adjacency),
-boolean_adjacency = (env.boolean_adjacency),
+current_adjacency = deepcopy(env.current_adjacency),
+boolean_adjacency = deepcopy(env.boolean_adjacency),
 weighted_edge_list = (env.weighted_edge_list), 
-reward_list = (env.reward_list),
-amask = (env.amask),
-finished = (env.finished),
-history = (env.history)
+reward_list = deepcopy(env.reward_list),
+amask = deepcopy(env.amask),
+finished = deepcopy(env.finished),
+history = deepcopy(env.history)
 )
 
 

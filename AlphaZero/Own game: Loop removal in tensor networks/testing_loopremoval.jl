@@ -20,6 +20,5 @@ Part to create a Tenet.TensorNetwork to try and play a game on
 experiment = AlphaZero.Experiment("Loopremoval", GameSpec(), params, Network, netparams, benchmark)
 #AlphaZero.Scripts.test_game(experiment, n=1)
 
-
+#AlphaZero.Scripts.explore(experiment)
 Scripts.dummy_run(experiment)
-#AlphaZero.Scripts.dummy_run(experiment)
