@@ -45,9 +45,9 @@ function GI.init(::GameSpec)
     Return an initialized GameEnv
     """
 
-    dimension = 3                                                               # Update this to allow sized adjacency extraction
+    dimension = [2,10]                                                          # Update this to allow sized adjacency extraction
     G = Graphs.smallgraph(:frucht)
-    TN = fill_with_random(G, dimension, false, true)
+    TN = fill_with_random(G, dimension, false, false)
 
     graph, tv_map, ie_map, weighted_edge_list, ei_map = extract_graph_representation(TN, false) # Extract the graphs.jl structure from the Tenet.TensorNetwork
     sized_adjacency = sized_adj_from_weightededges(weighted_edge_list, graph)

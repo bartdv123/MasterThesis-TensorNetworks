@@ -8,11 +8,13 @@ using Tenet
 using TensorOperations
 using LinearAlgebra
 using Graphs
+using Colors
 using GraphPlot
 using EinExprs
 using Combinatorics
 using LaTeXStrings
 Makie.inline!(true)
+
 
 """
 Julia file with all the relevant functions which can be reused in different
@@ -25,7 +27,8 @@ Make sure to copy this file to the correct directory beforehand.
 # Main big functions -> these functions use some functionality from the smaller helper functions below
 function truncated_SVD_replacement(tn, index, bondsize, printing=false)
 
-    """ Function which takes in a TensorNetwork and an index which connect two tensors inside of this network.
+    """ 
+    Function which takes in a TensorNetwork and an index which connect two tensors inside of this network.
     This function applies truncated SVD bond-compression through grouping of R-tensors from QR decomposition on the bond.
     Return the TensorNetwork with relevant modification made to bond tensors connected to this index.
 
@@ -232,12 +235,11 @@ function grouping_bondindices(tn, indices_to_group, printing=false)
 end
 
 function approximate_contraction(tn, max_chi, list_of_contraction_indices, visualisation = false, svd_printing = false)
+
     """ 
-    
     Function takes in a TensorNetwork, a maximal allowed bondsize and a sequence of contraction indices.
     It uses pairwise approximate contraction based on SVD truncation to max_chi on the bond following a contraction a sequence of indices.
     It generates a mapping of indices to new indices when the need for bondgrouping arrises and updates the contraction path when needed.
-    
     """
     
     for i in 1:length(tensors(tn))
@@ -369,8 +371,10 @@ function generate_all_possible_looptotree_replacements(n)
 
     """ 
     This function takes in a number n which represents the amount of vertices in the loop which we want to replace.
-    The is done purely on graph-level reasoning, the fact that the graph represents a complex network of interconnected tensors is not yet taking into account.
-    The function returns a list of simple graphs which are the possible spanning tree replacements for this tensor loop.
+    The is done purely on graph-level reasoning, the fact that the graph represents
+    a complex network of interconnected tensors is not yet taking into account.
+    The function returns a list of simple graphs which are the possible 
+    spanning tree replacements for this tensor loop.
     """
 
     # Generate a complete graph of order n to extract all possible spanning trees on this graph structure
@@ -409,7 +413,10 @@ end
 # Smaller helper functions
 function contraction_step(tn, bond_index)
 
-    """ Helper function to allow contraction of the tensor network along a specified index """
+    """ 
+    Helper function to allow contraction of the tensor network
+    along a specified index 
+    """
     
     if length(inds(tn)) == 0
         return
@@ -430,7 +437,10 @@ end
 
 function generate_groupedbonds(tn)
 
-    """ Generates a dictionary containing as keys lists of bond-indices between two tensors and as vals the tensors in connecting the bonds """
+    """ 
+    Generates a dictionary containing as keys lists of bond-indices
+    between two tensors and as vals the tensors in connecting the bonds
+    """
 
     result_dict = Dict{Vector, Vector}()
 
@@ -445,7 +455,11 @@ function generate_groupedbonds(tn)
 end
 
 function size_up_and_reconnect(S, index)
-    """ This helper function takes in tensor S from the SVD and splits it in two -> two times s^(1/2) reconnects them with the index of the bond """
+
+    """ 
+    This helper function takes in tensor S from the SVD and splits it 
+    in two -> two times s^(1/2) reconnects them with the index of the bond 
+    """
 
     s12_data = S.data.^(1/2)
     s12_data_matrix = LinearAlgebra.diagm(s12_data)
@@ -457,7 +471,11 @@ function size_up_and_reconnect(S, index)
 end
 
 function tensor_cutting_index!(tensor, index, bondsize)
-    """ Function which takes in a tensor, a symbolic index and a bondsize. Reduces the dimension of this index towards bondsize """
+
+    """ 
+    Function which takes in a tensor, a symbolic index and a bondsize. 
+    Reduces the dimension of this index to bondsize 
+    """
     
     slice_location = dim(tensor, index)
     # Create a tuple of slices for each dimension
@@ -656,6 +674,11 @@ end
 
 function cycle_basis_to_edges(cycle_basis)
 
+    """
+    This function takes in a cycle basis of a graph and return
+    a list of sorted tuples containing all edges inside of the graph
+    """
+
     edges = []
 
     for cycle in cycle_basis
@@ -705,3 +728,75 @@ function update_edge_availability(graph, fully_weighted_edge_list, boolean_edge_
     return boolean_edge_availability
 
 end
+
+function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edge)
+
+    """
+    Initial cost function which takes in a graph, list of edges with their 
+    weights, the selected cycle and the selected edge in this cycle.
+    Based on this information it calculates the DMRG cost in the χ^5 cost model
+    """
+
+    loop_active, dang_active = extract_edge_representation_and_physical_indices(graph, selected_cycle)
+
+    # Get a list of all participating bond dimensions in the MPS
+    # Extract the maximal occuring bond dimensions
+    # Cost model it as Χ^5
+
+    chi_in_choosen_MPS = []
+    for edge in vcat(loop_active, dang_active)
+        println(edge)
+        if edge == selected_edge
+            continue
+        else
+            for (v1,v2,w3) in weighted_edges
+                if Tuple(sort([v1,v2])) == edge
+                    push!(chi_in_choosen_MPS, w3)
+                    break
+                end
+            end
+        end
+    end
+
+    return maximum(chi_in_choosen_MPS)^5
+end
+
+function display_selected_action(graph, cycle, choosen_edge)
+
+    """
+    This function takes in a graph from graphs.jl, 
+    a cycle inside from the cycle basis of the graph and a choosen edge
+    on this graph which is the where the cut is made.
+    By generating a graphplot with a color code the selected edge and underlying
+    MPS structure for appling DMRG is visualized
+    """
+
+    nodes = [node for node in vertices(graph)]
+    loop_active, dang_active = extract_edge_representation_and_physical_indices(graph, cycle)
+    colors_for_edges = []
+    for edge in edges(graph)
+        s = src(edge)
+        d = dst(edge)
+        if Tuple((Int(s), Int(d))) == choosen_edge
+            push!(colors_for_edges, colorant"green2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in loop_active
+            push!(colors_for_edges, colorant"seagreen2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in dang_active
+            push!(colors_for_edges, colorant"darkolivegreen")
+            continue
+        end
+        
+        push!(colors_for_edges, colorant"grey")
+      
+    end
+
+    display(gplot(graph, edgestrokec = colors_for_edges, nodelabel=nodes, nodefillc=colorant"springgreen3", layout=spring_layout))
+    
+end
+
+
+
