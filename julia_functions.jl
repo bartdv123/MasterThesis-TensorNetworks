@@ -96,9 +96,6 @@ function truncated_SVD_replacement(tn, index, bondsize, printing=false)
 
     new_bond = string(index)*"_*"
 
-
-
-
     R12 = Tenet.contract(R1, R2)
 
     # Some-decission making based on the tensor R12
@@ -729,6 +726,46 @@ function update_edge_availability(graph, fully_weighted_edge_list, boolean_edge_
 
 end
 
+
+function extract_edge_representation_and_physical_indices(graph, cycle)
+
+    """
+    Helper function which probes the graph structure given a cycle.
+    The function extract all the edges and all the dangling edges
+    if this loop would be cut out off the graph.
+    """
+    
+    # First extract the cycle edges 
+    cycle_edges = []
+    # Extract the edges from the current cycle
+    c_edges = [[cycle[i], cycle[i+1]] for i in 1:length(cycle)-1]
+    push!(c_edges, [cycle[end], cycle[1]])
+    # add the sorted edge to the edges if not already inside of edges
+    for edge in c_edges
+        if Tuple(sort(edge)) in cycle_edges                                              
+            continue
+        end
+        push!(cycle_edges, Tuple(sort(edge)))
+    end 
+
+
+    # Now extract the dangling edges
+    # List of all edges connected to cycle vertices -> filter out cycle edges
+    dangling = []
+    for vertex in cycle
+        for connected_vertex in neighbors(graph, vertex)
+            if Tuple(sort([vertex, connected_vertex])) in cycle_edges
+                continue
+            end
+            push!(dangling, Tuple(sort([vertex, connected_vertex])))
+        end
+    end
+
+    return sort(cycle_edges), sort(dangling)
+
+end
+
+
 function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edge)
 
     """
@@ -761,6 +798,41 @@ function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edg
     return maximum(chi_in_choosen_MPS)^5
 end
 
+
+function display_selected_cycle(graph, cycle)
+
+    """
+    This function takes in a graph from graphs.jl, a cycle from the 
+    cycle basis of the graph. By generating a graphplot with a 
+    color code the selected cycle is visualized.
+    """
+
+    nodes = [node for node in vertices(graph)]
+    loop_active, dang_active = extract_edge_representation_and_physical_indices(graph, cycle)
+    colors_for_edges = []
+    for edge in edges(graph)
+        s = src(edge)
+        d = dst(edge)
+        
+        if Tuple((Int(s), Int(d))) in loop_active
+            push!(colors_for_edges, colorant"seagreen2")
+            continue
+        end
+        
+        push!(colors_for_edges, colorant"grey")
+    end
+    
+    # Planar embedding for the Frucht Graph example
+    #TODO: Generalize to given the embedding as arguments and if not given
+    # automatically resort to spring layout inside of GraphPlot.jl
+    locs_x =     [4, 4, -5, -2, 0, 0, 2, 0, -3, -1, -6, -4]
+    locs_y =  -1*[-2, 1, -2, -1, 0, -2, 0, 3, 3, 1, 1, 0]
+
+    display(gplot(graph, locs_x, locs_y, edgestrokec = colors_for_edges, nodelabel=nodes, nodefillc=colorant"springgreen3"))
+    
+end
+
+
 function display_selected_action(graph, cycle, choosen_edge)
 
     """
@@ -768,7 +840,7 @@ function display_selected_action(graph, cycle, choosen_edge)
     a cycle inside from the cycle basis of the graph and a choosen edge
     on this graph which is the where the cut is made.
     By generating a graphplot with a color code the selected edge and underlying
-    MPS structure for appling DMRG is visualized
+    MPS structure for appling DMRG is visualized.
     """
 
     nodes = [node for node in vertices(graph)]
@@ -794,9 +866,98 @@ function display_selected_action(graph, cycle, choosen_edge)
       
     end
 
-    display(gplot(graph, edgestrokec = colors_for_edges, nodelabel=nodes, nodefillc=colorant"springgreen3", layout=spring_layout))
+    # Planar embedding for Frucht Graph example
+    locs_x =     [4, 4, -5, -2, 0, 0, 2, 0, -3, -1, -6, -4]
+    locs_y = -1*[-2, 1, -2, -1, 0, -2, 0, 3, 3, 1, 1, 0]
+
+    display(gplot(graph, locs_x, locs_y, edgestrokec = colors_for_edges, nodelabel=nodes, nodefillc=colorant"springgreen3"))
     
 end
 
 
+function minimum_cycle_basis(graph)
 
+    """
+    Return a minimum cycle basis / inner faces of a planar graph.
+    This function lists all fundamental loops which are present on the graph,
+    this in graph theoretical perspective comes out to finding the minimum
+    cycle basis instead of a general cycle basis (of which multiple exist)
+    """
+
+    cycle_basisses = []
+    
+    for root in vertices(graph)
+        for cycle in cycle_basis(graph, root)
+            if cycle ∉ cycle_basisses
+                push!(cycle_basisses, cycle)
+            end
+        end
+    end
+
+    unique_repr = []
+    unique_faces = []
+    for face in cycle_basisses
+        sorted_face = Tuple(sort(face))
+        if !(sorted_face in unique_repr)
+            push!(unique_repr, sorted_face)
+            push!(unique_faces, face)
+        end
+    end
+
+    # Sort lists by their lengths
+    sorted_faces = sort(unique_faces, by=length)
+
+    # Select the smallest possible elements forming a cycle basis
+    smallest_loops = sorted_faces[1:length(cycle_basis(graph))]
+    return smallest_loops
+end
+
+
+function create_actionmatrix(graph)
+
+    """
+    Function which takes in a graphs.jl graphs object and which generates the
+    possible actions in a matrix format. Here the collums represent possible 
+    edges and here the rows identify with the different possible faces. 
+    This way selecting a element of action matrix A[i,j] corresponds to
+    selecting both a possible face and an edge on the circumfrence of the face.
+    """
+
+    faces = minimum_cycle_basis(graph)
+    edges_graph = cycle_basis_to_edges(faces)
+    edge_basis = cyclebasis_to_edgebasis(faces)
+
+    # Create an action matrix with dimensions of #cycles ₓ #edges
+    A = zeros(Int, length(edge_basis), length(edges_graph))
+        
+    # Iterate through each cycle and check if each edge is inside
+    for (i, edgegroup) in enumerate(edge_basis)
+        for (j, edge) in enumerate(edges_graph)
+            if any(c == edge for c in edgegroup)
+                A[i, j] = 1
+            end
+        end
+    end
+    display(edge_basis)
+    println((edges_graph))
+    display(A)
+end
+
+
+function cyclebasis_to_edgebasis(minimal_cyclebasis)
+
+    """
+    Helper function for generating the possible edges inside of cycle,
+    this allows to easily generate the action matrix.
+    """
+    
+    edge_basis = []
+
+    for cycle in minimal_cyclebasis
+        # extract the edges from the current cycle
+        c_edges = [Tuple(sort([cycle[i], cycle[i+1]])) for i in 1:length(cycle)-1]
+        push!(c_edges, Tuple(sort([cycle[end], cycle[1]])))
+        push!(edge_basis, c_edges)
+    end
+    return edge_basis
+end

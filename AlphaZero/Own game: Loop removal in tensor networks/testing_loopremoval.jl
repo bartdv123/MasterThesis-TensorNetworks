@@ -11,11 +11,6 @@ include("game_v5_generate_locally.jl")
 include("params.jl")
 
 
-"""
-Part to create a Tenet.TensorNetwork to try and play a game on
---> Initial testing using the Frucht graph structure with all bond dimensions 3
-"""
-
 # Then, pass it to the experiment initialization:
 experiment = AlphaZero.Experiment("Loopremoval", GameSpec(), params, Network, netparams, benchmark)
 #AlphaZero.Scripts.test_game(experiment, n=1)
