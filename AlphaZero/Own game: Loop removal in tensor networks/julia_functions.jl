@@ -782,7 +782,6 @@ function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edg
 
     chi_in_choosen_MPS = []
     for edge in vcat(loop_active, dang_active)
-        println(edge)
         if edge == selected_edge
             continue
         else
@@ -938,9 +937,7 @@ function create_actionmatrix(graph)
             end
         end
     end
-    display(edge_basis)
-    println((edges_graph))
-    display(A)
+    return A
 end
 
 

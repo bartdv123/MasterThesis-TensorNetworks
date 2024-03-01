@@ -938,9 +938,7 @@ function create_actionmatrix(graph)
             end
         end
     end
-    display(edge_basis)
-    println((edges_graph))
-    display(A)
+    return A
 end
 
 

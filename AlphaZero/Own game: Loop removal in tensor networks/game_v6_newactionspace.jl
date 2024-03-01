@@ -7,9 +7,8 @@ using Tenet                                                                     
 include("julia_functions.jl")                                                   # Paste a copy of julia_functions.jl inside of the directory
 
 """
-Updated version 06 with locally generated graphs used for the logic 
-of cycle selection and the DMRG cost functions calculation.
-Version 06 tries to include the cycle selection inside of the action space.
+Updated version 05 with locally generated graphs 
+used for the logic of edge selection and cost function calculations
 """
 
 """
@@ -23,12 +22,19 @@ struct GameSpec <: GI.AbstractGameSpec end                                      
 
 mutable struct GameEnv <: GI.AbstractGameEnv                                    # Create a mutable strucutre -> this is updated during gameplay
 
+    #TODO: Simplify this GameEnv based on removing double stored things:
+
+    # Remove list_of_edges and work with the sized_edges instead.
+    # Amask masks out the sized edges.
+
     sized_adjacency::Matrix{Int64}                                              # Sizes of the edges inside an adjecancy matrix
     current_adjacency::Matrix{Int64}                                            # Current adjacency representation of the underlying graph. => update when action is taken
-    boolean_adjacency::Matrix{Int64}                                            # Current available_actions based cycle functions converted to matrix representation 
-    weighted_edge_list::Vector{Any}                                             # List of edges and dimensionality [[source, drain, size], ...]
+    boolean_action::Matrix{Int64}                                               # Current available_actions, parametrized as a matrix of (cycle ₓ edge in cycle)
+    list_of_edges::Vector{Any}                                                  # List of edges within the graph
+    cycle_basis::Vector{Any}                                                    # List of cycles current within the graph
+    weighted_edge_list::Vector{Any}                                             # Static List of edges and dimensionality [[source, drain, size], ...]
     reward_list::Array{Int64}                                                   # The rewards the agent got for the choices it made during the gameplay
-    amask::BitVector                                                            # Used by external solvers to interpret game position -> same as boolean_edge_availability
+    amask::BitVector                                                            # Boolean_edge_availability, which edges within list_of_edges are still available
     finished::Bool                                                              # Boolean to represent if the game is finished
     history:: Union{Nothing, Vector}                                            # History of actions
 
@@ -53,20 +59,24 @@ function GI.init(::GameSpec)
     graph, tv_map, ie_map, weighted_edge_list, ei_map = extract_graph_representation(TN, false) # Extract the graphs.jl structure from the Tenet.TensorNetwork
     sized_adjacency = sized_adj_from_weightededges(weighted_edge_list, graph)
     initial_adjacency = adjacency_matrix(graph)
-    boolean_adjacency = deepcopy(initial_adjacency)
-    history = Int[]
+    boolean_action = create_actionmatrix(graph)
+    cycle_basis = minimum_cycle_basis(graph)
+    list_of_edges = cycle_basis_to_edges(cycle_basis)
+    history = []
     amask = update_edge_availability(graph, weighted_edge_list, trues(length(weighted_edge_list)))
 
     return GameEnv(
-    sized_adjacency, 
-    initial_adjacency, 
-    boolean_adjacency,
-    weighted_edge_list,
-    Int64[], 
-    amask,
-    false, 
-    history
-    )
+        sized_adjacency,
+        initial_adjacency,
+        boolean_action,
+        list_of_edges,
+        cycle_basis,
+        weighted_edge_list,
+        Int64[],
+        amask,
+        false,
+        history    
+        )
 
 end
 
@@ -80,7 +90,9 @@ function GI.set_state!(env::GameEnv, state)
 
     env.sized_adjacency = state.sized_adjacency
     env.current_adjacency = state.current_adjacency
-    env.boolean_adjacency = state.boolean_adjacency
+    env.boolean_action = state.boolean_action
+    env.list_of_edges = state.list_of_edges
+    env.cycle_basis = state.cycle_basis
     env.weighted_edge_list = state.weighted_edge_list
     env.reward_list = state.reward_list
     env.amask = state.amask
@@ -110,7 +122,9 @@ function GI.clone(env::GameEnv)
     return GameEnv(
     deepcopy(env.sized_adjacency),
     deepcopy(env.current_adjacency),
-    deepcopy(env.boolean_adjacency),
+    deepcopy(env.boolean_action),
+    deepcopy(env.list_of_edges),
+    deepcopy(env.cycle_basis),
     deepcopy(env.weighted_edge_list),
     deepcopy(env.reward_list),
     deepcopy(env.amask),
@@ -124,18 +138,16 @@ end
 GI.two_players(::GameSpec) = false
 
 
-GI.actions(::GameSpec) = collect((1:7, 1:18))                                   # 18 edges in a frucht graph
+GI.actions(::GameSpec) = collect(1:18)                                          # 18 edges in a frucht graph
      
 
 function GI.available_actions(env::GameEnv)
-    # returns a list of indices where the action mask is still not false
-    indices = Int[]
 
-    for i in eachindex(env.amask)
-        if env.amask[i] == 1
-            push!(indices, i)
-        end
-    end
+    # Returns a list of tuples where the boolean action mask == 1
+    ones_indices = findall(x -> x == 1, env.boolean_action)
+  
+    #  Convert the indices to tuples of (row, column) format
+    indices =  [(i[1], i[2]) for i in ones_indices]
     return indices 
 end
 
@@ -160,7 +172,10 @@ function update_action_mask!(env::GameEnv, action)                              
 
     # Generate the current graph structure based on the adjacency matrix
     current_graph_representation = Graphs.SimpleGraphs.SimpleGraph(env.current_adjacency)
-    show = true
+    env.cycle_basis = minimum_cycle_basis(current_graph_representation)
+    env.boolean_action = create_actionmatrix(current_graph_representation)
+    display(env.boolean_action)
+    show = false
     if show == true
         nodes = [node for node in vertices(current_graph_representation)]
         display(gplot(current_graph_representation, nodelabel=nodes, nodefillc=colorant"springgreen3", layout=spring_layout))
@@ -169,7 +184,7 @@ function update_action_mask!(env::GameEnv, action)                              
     # Updating the edge mask based on the currently present loops inside of the graph
     env.amask = update_edge_availability(current_graph_representation, env.weighted_edge_list, env.amask)
     
-    # Checking if finishing condition is reached
+    # Checking if finishing condition is reached, edge availability is empty if the grapph is a tree
     if env.amask == zeros(length(env.amask))
         env.finished = true
     end
@@ -200,32 +215,37 @@ function GI.play!(env::GameEnv, action)
     What should happen in the game state when the agent takes an action
     -> Should happen inplace?
     """
-    
-    #TODO: Implement the possibility of updating the state spaces when
+    println(action)
+    #visualisation of what is being fed into the play! function
+    # TODO: Implement the possibility of updating the state spaces when
     # performing an action.
+    choosen_cycle = env.cycle_basis[action[1]]
+    choosen_edge = env.list_of_edges[action[2]]
 
-    isnothing(env.history) || push!(env.history, action)                        
+    isnothing(env.history) || push!(env.history, (choosen_cycle, choosen_edge))                        
     
-    # Based on the choosen action: integer between 1:length(edges)
-    # --> Cut this specific edge
-    selected_edge = env.weighted_edge_list[action]
+    # Generate the current graph structure: before edge removal through DMRG
+    old_graph = Graphs.SimpleGraphs.SimpleGraph(env.current_adjacency)
     
     # Remove the edge from the graph structure: update current_adjacency
-    
-    env.current_adjacency[selected_edge[1], selected_edge[2]] = 0
-    env.current_adjacency[selected_edge[2], selected_edge[1]] = 0
+
+    env.current_adjacency[choosen_edge[1], choosen_edge[2]] = 0
+    env.current_adjacency[choosen_edge[2], choosen_edge[1]] = 0
 
     # Update the other game variables such as edge availability based on cycle finding
-    update_status!(env, action)                                                 # updates the status of the amask, sized_adjacency, boolean_edge_availability, and game game_terminated
+    update_status!(env, action)                                                 # updates the status of the amask, and game game_terminated status
+    # --> Generates new possible cycle_basis -> cutting an edge can create new 
+    # possible faces. 
 
     """
     Rewards while_playing
     """
 
-    #TODO: IMPLEMENTATION OF DIFFERENT REWARD FUNCTIONS
-
-    # add the dimensionality of the severed index
-    push!(env.reward_list, selected_edge[3])
+    #TODO: IMPLEMENTATION OF DIFFERENT REWARD FUNCTIONS?
+    # Reward function right now is a chi_max^5 for all chi inside of the MPS
+    # structure which is uncovered after cutting an edge.
+    # display_selected_action(old_graph, choosen_cycle, choosen_edge)
+    push!(env.reward_list, calculate_DMRG_cost(old_graph, env.weighted_edge_list, choosen_cycle, choosen_edge))
 
 end
 
@@ -236,8 +256,10 @@ GI.current_state(env::GameEnv) =
 (
 sized_adjacency = (env.sized_adjacency),
 current_adjacency = deepcopy(env.current_adjacency),
-boolean_adjacency = deepcopy(env.boolean_adjacency),
-weighted_edge_list = deepcopy(env.weighted_edge_list), 
+boolean_action = deepcopy(env.boolean_action),
+list_of_edges = (env.list_of_edges),
+cycle_basis = deepcopy(env.cycle_basis),
+weighted_edge_list = (env.weighted_edge_list), 
 reward_list = deepcopy(env.reward_list),
 amask = deepcopy(env.amask),
 finished = deepcopy(env.finished),
@@ -260,7 +282,7 @@ end
 
 
 function GI.vectorize_state(::GameSpec, state)
-    return convert(Array{Float32}, cat(stack(state.sized_adjacency, dims=1), stack(state.current_adjacency, dims=1), stack(state.boolean_adjacency, dims=1), dims=3))
+    return convert(Array{Float32}, cat(stack(state.sized_adjacency, dims=1), stack(state.current_adjacency, dims=1), dims=3))
 end 
 
 function GI.white_reward(env::GameEnv)
