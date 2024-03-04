@@ -59,9 +59,9 @@ function GI.init(::GameSpec)
     graph, tv_map, ie_map, weighted_edge_list, ei_map = extract_graph_representation(TN, false) # Extract the graphs.jl structure from the Tenet.TensorNetwork
     sized_adjacency = sized_adj_from_weightededges(weighted_edge_list, graph)
     initial_adjacency = adjacency_matrix(graph)
-    boolean_action = create_actionmatrix(graph)
     cycle_basis = minimum_cycle_basis(graph)
     list_of_edges = cycle_basis_to_edges(cycle_basis)
+    boolean_action = create_actionmatrix(graph, list_of_edges)
     history = []
     amask = update_edge_availability(graph, weighted_edge_list, trues(length(weighted_edge_list)))
 
@@ -161,35 +161,6 @@ What does it mean to play a game???
 """
 
 
-function update_action_mask!(env::GameEnv, action)                              # Mask for action which are not possible anymore after performing an action
-
-    """
-    An inplace modification function for the action mask
-    An action is uniquely indentified and parametrized by the index inside of the boolean_edge_availability
-    array. This way, performing this action corresponds to masking this specific
-    action by a false inside of the amask.
-    """
-
-    # Generate the current graph structure based on the adjacency matrix
-    current_graph_representation = Graphs.SimpleGraphs.SimpleGraph(env.current_adjacency)
-    env.cycle_basis = minimum_cycle_basis(current_graph_representation)
-    env.boolean_action = create_actionmatrix(current_graph_representation)
-    display(env.boolean_action)
-    show = false
-    if show == true
-        nodes = [node for node in vertices(current_graph_representation)]
-        display(gplot(current_graph_representation, nodelabel=nodes, nodefillc=colorant"springgreen3", layout=spring_layout))
-    end
-
-    # Updating the edge mask based on the currently present loops inside of the graph
-    env.amask = update_edge_availability(current_graph_representation, env.weighted_edge_list, env.amask)
-    
-    # Checking if finishing condition is reached, edge availability is empty if the grapph is a tree
-    if env.amask == zeros(length(env.amask))
-        env.finished = true
-    end
-end
-
 
 GI.actions_mask(env::GameEnv) = (env.amask)
 
@@ -209,6 +180,38 @@ function update_status!(env::GameEnv, action)
 end
 
 
+function update_action_mask!(env::GameEnv, action)                              # Mask for action which are not possible anymore after performing an action
+
+    """
+    An inplace modification function for the action mask
+    An action is uniquely indentified and parametrized by the index inside of the boolean_edge_availability
+    array. This way, performing this action corresponds to masking this specific
+    action by a false inside of the amask.
+    """
+
+    # Generate the current graph structure based on the adjacency matrix
+    current_graph_representation = Graphs.SimpleGraphs.SimpleGraph(env.current_adjacency)
+    env.cycle_basis = minimum_cycle_basis(current_graph_representation)
+    env.boolean_action = create_actionmatrix(current_graph_representation, env.list_of_edges)
+
+    show = false
+    if show == true
+        nodes = [node for node in vertices(current_graph_representation)]
+        locs_x =     [4, 4, -5, -2, 0, 0, 2, 0, -3, -1, -6, -4]
+        locs_y =  -1*[-2, 1, -2, -1, 0, -2, 0, 3, 3, 1, 1, 0]
+        display(gplot(current_graph_representation, locs_x, locs_y, nodelabel=nodes, nodefillc=colorant"springgreen3")) #, layout=spring_layout)
+    end
+
+    # Updating the edge mask based on the currently present loops inside of the graph
+    env.amask = update_edge_availability(current_graph_representation, env.weighted_edge_list, env.amask)
+    # Checking if finishing condition is reached, edge availability is empty if the grapph is a tree
+    if env.amask == zeros(length(env.amask))
+        env.finished = true
+    end
+end
+
+
+
 function GI.play!(env::GameEnv, action)
 
     """
@@ -222,6 +225,9 @@ function GI.play!(env::GameEnv, action)
     choosen_cycle = env.cycle_basis[action[1]]
     choosen_edge = env.list_of_edges[action[2]]
 
+    println(choosen_cycle)
+    println(choosen_edge)
+
     isnothing(env.history) || push!(env.history, (choosen_cycle, choosen_edge))                        
     
     # Generate the current graph structure: before edge removal through DMRG
@@ -233,7 +239,7 @@ function GI.play!(env::GameEnv, action)
     env.current_adjacency[choosen_edge[2], choosen_edge[1]] = 0
 
     # Update the other game variables such as edge availability based on cycle finding
-    update_status!(env, action)                                                 # updates the status of the amask, and game game_terminated status
+    update_status!(env, action)                                                 # Updates the status of the amask, and game game_terminated status
     # --> Generates new possible cycle_basis -> cutting an edge can create new 
     # possible faces. 
 
@@ -246,7 +252,7 @@ function GI.play!(env::GameEnv, action)
     # structure which is uncovered after cutting an edge.
     # display_selected_action(old_graph, choosen_cycle, choosen_edge)
     push!(env.reward_list, calculate_DMRG_cost(old_graph, env.weighted_edge_list, choosen_cycle, choosen_edge))
-
+    display_selected_action(old_graph, choosen_cycle, choosen_edge)
 end
 
 # Some more neccesary implementations
@@ -254,10 +260,10 @@ end
 GI.current_state(env::GameEnv) = 
 
 (
-sized_adjacency = (env.sized_adjacency),
+sized_adjacency = deepcopy(env.sized_adjacency),
 current_adjacency = deepcopy(env.current_adjacency),
 boolean_action = deepcopy(env.boolean_action),
-list_of_edges = (env.list_of_edges),
+list_of_edges = deepcopy(env.list_of_edges),
 cycle_basis = deepcopy(env.cycle_basis),
 weighted_edge_list = (env.weighted_edge_list), 
 reward_list = deepcopy(env.reward_list),
