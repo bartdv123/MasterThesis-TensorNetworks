@@ -4,7 +4,7 @@ Here we can modify the hyperparameters of the underlying neural network
 
 Network = NetLib.ResNet
 
-netparams = NetLib.ResNetHP(
+netparams = NetLib.ResNetHP(                                                    # important parameters of RESNET
   num_filters=128,
   num_blocks=5,
   conv_kernel_size=(3, 3),
@@ -23,7 +23,7 @@ self_play = SelfPlayParams(
   mcts=MctsParams(
     num_iters_per_turn=50,
     cpuct=1.0,
-    prior_temperature=1.0,
+    prior_temperature=1.0,                                                      # important
     temperature=ConstSchedule(0.),
     dirichlet_noise_ϵ=0.,
     dirichlet_noise_α=1.0))
@@ -40,7 +40,7 @@ arena = ArenaParams(
   mcts=MctsParams(
     self_play.mcts,
     temperature=ConstSchedule(0.2),
-    dirichlet_noise_ϵ=0.05),
+    dirichlet_noise_ϵ=0.),
   update_threshold=0.05)
 
 learning = LearningParams(
@@ -49,7 +49,7 @@ learning = LearningParams(
   samples_weighing_policy=LOG_WEIGHT,
   batch_size=2,
   loss_computation_batch_size=2,
-  optimiser=Adam(lr=2e-3),
+  optimiser=Adam(lr=2e-3),                                                      # adam = de mattie, important
   l2_regularization=1e-4,
   nonvalidity_penalty=1.,
   min_checkpoints_per_epoch=1,

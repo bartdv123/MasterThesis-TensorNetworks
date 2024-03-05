@@ -194,19 +194,22 @@ function update_action_mask!(env::GameEnv, action)                              
     env.cycle_basis = minimum_cycle_basis(current_graph_representation)
     env.boolean_action = create_actionmatrix(current_graph_representation, env.list_of_edges)
 
-    show = false
-    if show == true
-        nodes = [node for node in vertices(current_graph_representation)]
-        locs_x =     [4, 4, -5, -2, 0, 0, 2, 0, -3, -1, -6, -4]
-        locs_y =  -1*[-2, 1, -2, -1, 0, -2, 0, 3, 3, 1, 1, 0]
-        display(gplot(current_graph_representation, locs_x, locs_y, nodelabel=nodes, nodefillc=colorant"springgreen3")) #, layout=spring_layout)
-    end
+    show = true
+    #, layout=spring_layout)
+    
 
     # Updating the edge mask based on the currently present loops inside of the graph
     env.amask = update_edge_availability(current_graph_representation, env.weighted_edge_list, env.amask)
     # Checking if finishing condition is reached, edge availability is empty if the grapph is a tree
     if env.amask == zeros(length(env.amask))
         env.finished = true
+        if show == true
+            #display the final tree that the network found
+            nodes = [node for node in vertices(current_graph_representation)]
+            locs_x =     [4, 4, -5, -2, 0, 0, 2, 0, -3, -1, -6, -4]
+            locs_y =  -1*[-2, 1, -2, -1, 0, -2, 0, 3, 3, 1, 1, 0]
+            display(gplot(current_graph_representation, locs_x, locs_y, nodelabel=nodes, nodefillc=colorant"springgreen3")) 
+        end
     end
 end
 
@@ -218,15 +221,12 @@ function GI.play!(env::GameEnv, action)
     What should happen in the game state when the agent takes an action
     -> Should happen inplace?
     """
-    println(action)
     #visualisation of what is being fed into the play! function
     # TODO: Implement the possibility of updating the state spaces when
     # performing an action.
     choosen_cycle = env.cycle_basis[action[1]]
     choosen_edge = env.list_of_edges[action[2]]
 
-    println(choosen_cycle)
-    println(choosen_edge)
 
     isnothing(env.history) || push!(env.history, (choosen_cycle, choosen_edge))                        
     
@@ -251,8 +251,9 @@ function GI.play!(env::GameEnv, action)
     # Reward function right now is a chi_max^5 for all chi inside of the MPS
     # structure which is uncovered after cutting an edge.
     # display_selected_action(old_graph, choosen_cycle, choosen_edge)
-    push!(env.reward_list, calculate_DMRG_cost(old_graph, env.weighted_edge_list, choosen_cycle, choosen_edge))
-    display_selected_action(old_graph, choosen_cycle, choosen_edge)
+    # minimize the loss -> -1*
+    push!(env.reward_list, -1*calculate_DMRG_cost(old_graph, env.weighted_edge_list, choosen_cycle, choosen_edge))
+
 end
 
 # Some more neccesary implementations

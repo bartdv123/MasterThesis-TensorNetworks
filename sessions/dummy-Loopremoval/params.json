@@ -47,7 +47,7 @@
             "temperature": {
                 "value": 0.2
             },
-            "dirichlet_noise_ϵ": 0.05,
+            "dirichlet_noise_ϵ": 0,
             "dirichlet_noise_α": 1,
             "prior_temperature": 1
         },

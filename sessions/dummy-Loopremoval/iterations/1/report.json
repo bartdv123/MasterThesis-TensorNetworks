@@ -1,0 +1,76 @@
+{
+    "perfs_self_play": {
+        "time": 0.502321193,
+        "allocated": 166443601,
+        "gc_time": 0.02733617
+    },
+    "perfs_memory_analysis": {
+        "time": 4.2e-7,
+        "allocated": 0,
+        "gc_time": 0
+    },
+    "perfs_learning": {
+        "time": 2.277752979,
+        "allocated": 873045533,
+        "gc_time": 0.547193719
+    },
+    "self_play": {
+        "samples_gen_speed": 17.073462396416158,
+        "average_exploration_depth": 0.9285714285714286,
+        "mcts_memory_footprint": 134688,
+        "memory_size": 7,
+        "memory_num_distinct_boards": 7
+    },
+    "memory": null,
+    "learning": {
+        "time_convert": 0.052904219,
+        "time_loss": 0.287449653,
+        "time_train": 0.883815595,
+        "time_eval": 0.655581408,
+        "initial_status": {
+            "loss": {
+                "L": 3474695000000,
+                "Lp": 1.5745233,
+                "Lv": 3474695000000,
+                "Lreg": 0.16738956,
+                "Linv": 0.36375007
+            },
+            "Hp": 0.59412587,
+            "Hpnet": 1.97606
+        },
+        "losses": [
+            3031464400000,
+            4313021400000
+        ],
+        "checkpoints": [
+            {
+                "batch_id": 2,
+                "evaluation": {
+                    "legend": "Most recent NN versus best NN so far",
+                    "avgr": -254883,
+                    "redundancy": 0,
+                    "rewards": [
+                        -1881974
+                    ],
+                    "baseline_rewards": [
+                        -1627091
+                    ],
+                    "time": 0.655581408
+                },
+                "status_after": {
+                    "loss": {
+                        "L": 3474690000000,
+                        "Lp": 2.6445622,
+                        "Lv": 3474690000000,
+                        "Lreg": 0.14363848,
+                        "Linv": 0.41901335
+                    },
+                    "Hp": 0.59412587,
+                    "Hpnet": 0.5889544
+                },
+                "nn_replaced": false
+            }
+        ],
+        "nn_replaced": false
+    }
+}
