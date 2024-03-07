@@ -958,3 +958,212 @@ function cyclebasis_to_edgebasis(minimal_cyclebasis)
     end
     return edge_basis
 end
+
+
+function edge_weights_update_DMRG_exact(old_graph, selected_cycle, selected_edge, weighted_edge_list)
+
+    """
+    Exact DMRG dimensionality updating function. This function takes in the old
+    graph structure, the selected_cycle as a list of vertices, the selected edge
+    as a tuple and the current weighted_edge_list.
+
+    Based on the possible information flow through the dimensions of the tensor
+    network it computes the updated edge weights and returns a new updated
+    weighted_edge_list.
+    """
+
+    # extract edges inside of the loop and the ones which are dangling from the loop
+    loop_active, dang_active = extract_edge_representation_and_physical_indices(old_graph, selected_cycle)
+    virtual_MPS_edges = filter!(x -> x != selected_edge, loop_active)           # filter out the choosen edge which is cut 
+
+
+    # create a dictionary for easely accesing the dimensions of the edges inside of the network
+    weights_dict = Dict((edge1, edge2) => weight for (edge1, edge2, weight) in weighted_edge_list)
+
+    # Note: Important in this whole ordeal in having the correct ordering of edges and danling edges
+    # This allows one to compute the correct dimensions inside of the exact DMRG replacement
+
+    # Extract edge sequence based on walking along the cycle from 
+    # selected_edge[1] towards selected_edge[2] 
+    sd_virtual_edges_cycle = []
+
+    # Extract dangling edges sequence when walking along the cycle from
+    # selected_edge[1] towards selected_edge[2]
+    sd_dangling_edges_cycle = []
+
+    # walk along the cycle from source to drain
+    current_position = selected_edge[1]
+    end_vertex = selected_edge[2]
+    
+    # LOGIC FOR EXTRACTING ALL NEEDED EDGES IN THE RIGHT ORDERING SO THAT LEFT
+    # AND RIGHT PRODUCT CAN BE DEFINED
+    loop_length = length(virtual_MPS_edges)
+
+
+    # walk the loop
+    for i in 1:loop_length
+        chosen_edge = [Tuple(sort([source, drain])) for (source, drain) in virtual_MPS_edges if source == current_position || drain == current_position][1]
+        push!(sd_virtual_edges_cycle, chosen_edge)
+        filter!(x -> x != chosen_edge, virtual_MPS_edges)
+
+        dangling_edge = [Tuple(sort([source, drain])) for (source, drain) in dang_active if source == current_position || drain == current_position]
+        # can sometimes not find such a tuple... 
+        if length(dangling_edge) == 1
+        # If it's not empty, get the second tuple (index 1) and sort it
+            dangling_edge = dangling_edge[1]
+        else
+            # If it's empty, handle the case when no matching tuple is found
+            dangling_edge = nothing                                             # match nothing with insert a size 1 product into the DMRG product replacement
+        end
+
+        push!(sd_dangling_edges_cycle, dangling_edge)
+        
+        # walk along the path
+        current_position = (current_position == chosen_edge[1]) ? chosen_edge[2] : chosen_edge[1]
+
+
+        # final DANLING EDGE? --> check at the end of the MPS structure
+        if i == loop_length
+            dangling_edge = [Tuple(sort([source, drain])) for (source, drain) in dang_active if source == current_position || drain == current_position]
+            # can sometimes not find such a tuple... 
+            if length(dangling_edge) == 1
+            # If it's not empty, get the second tuple (index 1) and sort it
+                dangling_edge = dangling_edge[1]
+            else
+                # If it's empty, handle the case when no matching tuple is found
+                dangling_edge = nothing                                             # match nothing with insert a size 1 product into the DMRG product replacement
+            end
+            push!(sd_dangling_edges_cycle, dangling_edge)
+        end
+    end
+
+    # usage of the ternary operator in julia -> julia-like-code
+    sd_dangling_weights = [dangling_edge == nothing ? 1 : weights_dict[dangling_edge] for dangling_edge in sd_dangling_edges_cycle]
+
+    new_virtual_weights = []
+
+    # extract the new dimensions in the exact MPS representation based on
+    # correct placement along the cycle
+
+    for (i,edge) in enumerate(sd_virtual_edges_cycle)
+        # println("right dangling =", prod(sd_dangling_weights[1:i]), " Left dangling = ", prod(sd_dangling_weights[i+1:end]))
+        # push the minimum of [( product of left dangling dimensions ), (product of right dangling dimensions)]
+        push!(new_virtual_weights,(edge[1], edge[2], min(prod(sd_dangling_weights[1:i]), prod(sd_dangling_weights[i+1:end]))))
+    end
+    
+    
+    # Create a dictionary to store the new weights by (source, drain) pair
+    new_weights_dict = Dict((source, drain) => weight for (source, drain, weight) in new_virtual_weights)
+
+    # Generate the new list with updated weights
+    new_weighted_edge_list = [(source, drain, haskey(new_weights_dict, (source, drain)) ? new_weights_dict[(source, drain)] : weight) for (source, drain, weight) in weighted_edge_list]
+    
+    return new_weighted_edge_list
+
+
+end
+
+
+function edge_weights_update_DRMG_chi_max(old_graph, selected_cycle, selected_edge, weighted_edge_list, chi_max)
+
+    """
+    Approximate DMRG dimensionality updating, this allows one to specify a 
+    chi_max --> maximal allowable bond dimension in the virtual_MPS_edges. 
+    This function takes in the old graph structure, the selected_cycle as a 
+    list of vertices, the selected edge as a tuple and the 
+    current weighted_edge_list.
+
+    Based on the possible information flow through the dimensions of the tensor
+    network it computes the updated edge weights and returns a new updated
+    weighted_edge_list.
+    """
+
+    # extract edges inside of the loop and the ones which are dangling from the loop
+    loop_active, dang_active = extract_edge_representation_and_physical_indices(old_graph, selected_cycle)
+    virtual_MPS_edges = filter!(x -> x != selected_edge, loop_active)           # filter out the choosen edge which is cut 
+
+
+    # create a dictionary for easely accesing the dimensions of the edges inside of the network
+    weights_dict = Dict((edge1, edge2) => weight for (edge1, edge2, weight) in weighted_edge_list)
+
+    # Note: Important in this whole ordeal in having the correct ordering of edges and danling edges
+    # This allows one to compute the correct dimensions inside of the exact DMRG replacement
+
+    # Extract edge sequence based on walking along the cycle from 
+    # selected_edge[1] towards selected_edge[2] 
+    sd_virtual_edges_cycle = []
+
+    # Extract dangling edges sequence when walking along the cycle from
+    # selected_edge[1] towards selected_edge[2]
+    sd_dangling_edges_cycle = []
+
+    # walk along the cycle from source to drain
+    current_position = selected_edge[1]
+    end_vertex = selected_edge[2]
+    
+    # LOGIC FOR EXTRACTING ALL NEEDED EDGES IN THE RIGHT ORDERING SO THAT LEFT
+    # AND RIGHT PRODUCT CAN BE DEFINED
+    loop_length = length(virtual_MPS_edges)
+
+
+    # walk the loop
+    for i in 1:loop_length
+        chosen_edge = [Tuple(sort([source, drain])) for (source, drain) in virtual_MPS_edges if source == current_position || drain == current_position][1]
+        push!(sd_virtual_edges_cycle, chosen_edge)
+        filter!(x -> x != chosen_edge, virtual_MPS_edges)
+
+        dangling_edge = [Tuple(sort([source, drain])) for (source, drain) in dang_active if source == current_position || drain == current_position]
+        # can sometimes not find such a tuple... 
+        if length(dangling_edge) == 1
+        # If it's not empty, get the second tuple (index 1) and sort it
+            dangling_edge = dangling_edge[1]
+        else
+            # If it's empty, handle the case when no matching tuple is found
+            dangling_edge = nothing                                             # match nothing with insert a size 1 product into the DMRG product replacement
+        end
+
+        push!(sd_dangling_edges_cycle, dangling_edge)
+        
+        # walk along the path
+        current_position = (current_position == chosen_edge[1]) ? chosen_edge[2] : chosen_edge[1]
+
+
+        # final DANLING EDGE? --> check at the end of the MPS structure
+        if i == loop_length
+            dangling_edge = [Tuple(sort([source, drain])) for (source, drain) in dang_active if source == current_position || drain == current_position]
+            # can sometimes not find such a tuple... 
+            if length(dangling_edge) == 1
+            # If it's not empty, get the second tuple (index 1) and sort it
+                dangling_edge = dangling_edge[1]
+            else
+                # If it's empty, handle the case when no matching tuple is found
+                dangling_edge = nothing                                             # match nothing with insert a size 1 product into the DMRG product replacement
+            end
+            push!(sd_dangling_edges_cycle, dangling_edge)
+        end
+    end
+
+    # usage of the ternary operator in julia -> julia-like-code
+    sd_dangling_weights = [dangling_edge == nothing ? 1 : weights_dict[dangling_edge] for dangling_edge in sd_dangling_edges_cycle]
+
+    new_virtual_weights = []
+
+    # extract the new dimensions in the exact MPS representation based on
+    # correct placement along the cycle
+
+    for (i,edge) in enumerate(sd_virtual_edges_cycle)
+        # println("right dangling =", prod(sd_dangling_weights[1:i]), " Left dangling = ", prod(sd_dangling_weights[i+1:end]))
+        # push the minimum of [( product of left dangling dimensions ), (product of right dangling dimensions)]
+        push!(new_virtual_weights,(edge[1], edge[2], min(prod(sd_dangling_weights[1:i]), prod(sd_dangling_weights[i+1:end]), chi_max)))
+    end
+    
+    
+    # Create a dictionary to store the new weights by (source, drain) pair
+    new_weights_dict = Dict((source, drain) => weight for (source, drain, weight) in new_virtual_weights)
+
+    # Generate the new list with updated weights
+    new_weighted_edge_list = [(source, drain, haskey(new_weights_dict, (source, drain)) ? new_weights_dict[(source, drain)] : weight) for (source, drain, weight) in weighted_edge_list]
+    
+    return new_weighted_edge_list
+
+end
