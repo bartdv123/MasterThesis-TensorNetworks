@@ -782,7 +782,6 @@ function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edg
 
     chi_in_choosen_MPS = []
     for edge in vcat(loop_active, dang_active)
-        println(edge)
         if edge == selected_edge
             continue
         else
@@ -913,7 +912,7 @@ function minimum_cycle_basis(graph)
 end
 
 
-function create_actionmatrix(graph)
+function create_actionmatrix(graph, all_edges)
 
     """
     Function which takes in a graphs.jl graphs object and which generates the
@@ -924,7 +923,7 @@ function create_actionmatrix(graph)
     """
 
     faces = minimum_cycle_basis(graph)
-    edges_graph = cycle_basis_to_edges(faces)
+    edges_graph = all_edges
     edge_basis = cyclebasis_to_edgebasis(faces)
 
     # Create an action matrix with dimensions of #cycles ₓ #edges
