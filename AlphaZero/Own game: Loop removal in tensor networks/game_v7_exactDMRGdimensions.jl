@@ -196,22 +196,26 @@ function update_action_mask!(env::GameEnv, action)                              
     
 
 
-
-
-    show = true
     
+
+    show_plot = false
+    show_history = true
 
     # Updating the edge mask based on the currently present loops inside of the graph
     env.amask = update_edge_availability(current_graph_representation, env.weighted_edge_list, env.amask)
     # Checking if finishing condition is reached, edge availability is empty if the grapph is a tree
     if env.amask == zeros(length(env.amask))
         env.finished = true
-        if show == true
+        if show_plot == true
             #display the final tree that the network found
             nodes = [node for node in vertices(current_graph_representation)]
             locs_x =     [4, 4, -5, -2, 0, 0, 2, 0, -3, -1, -6, -4]
             locs_y =  -1*[-2, 1, -2, -1, 0, -2, 0, 3, 3, 1, 1, 0]
             display(gplot(current_graph_representation, locs_x, locs_y, nodelabel=nodes, nodefillc=colorant"springgreen3")) 
+        end
+        
+        if show_history == true
+            println(env.history)
         end
     end
 end
@@ -253,7 +257,7 @@ function GI.play!(env::GameEnv, action)
     push!(env.reward_list, -1*calculate_DMRG_cost(old_graph, env.weighted_edge_list, choosen_cycle, choosen_edge))
 
     env.weighted_edge_list = edge_weights_update_DMRG_exact(old_graph, choosen_cycle, choosen_edge, env.weighted_edge_list)
-    env.sized_adjacency = sized_adj_from_weightededges(fully_weighted_edge_list, old_graph)
+    env.sized_adjacency = sized_adj_from_weightededges(env.weighted_edge_list, old_graph)
     # Update the other game variables such as edge availability based on cycle finding
     update_status!(env, action)                                                 # Updates the status of the amask, and game game_terminated status
     # --> Generates new possible cycle_basis -> cutting an edge can create new 
