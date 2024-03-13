@@ -25,8 +25,8 @@ self_play = SelfPlayParams(
     cpuct=1.0,
     prior_temperature=1.0,                                                      # important
     temperature=ConstSchedule(0.),
-    dirichlet_noise_ϵ=0.,
-    dirichlet_noise_α=2.0))
+    dirichlet_noise_ϵ=0.5,
+    dirichlet_noise_α=1.0))
 
 arena = ArenaParams(
   sim=SimParams(
@@ -34,13 +34,13 @@ arena = ArenaParams(
     num_workers=1,
     batch_size=1,
     use_gpu=true,
-    reset_every=1,
+    reset_every=7,
     flip_probability=0,
     alternate_colors=false),
   mcts=MctsParams(
     self_play.mcts,
     temperature=ConstSchedule(0.2),
-    dirichlet_noise_ϵ=0.,
+    dirichlet_noise_ϵ=0.5,
     dirichlet_noise_α=1.0),
   update_threshold=0.05)
 

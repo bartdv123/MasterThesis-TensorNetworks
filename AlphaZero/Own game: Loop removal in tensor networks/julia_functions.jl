@@ -1167,3 +1167,19 @@ function edge_weights_update_DRMG_chi_max(old_graph, selected_cycle, selected_ed
     return new_weighted_edge_list
 
 end
+
+
+function zero_padding_to_size(action_vector, size)
+
+    d = size - length(action_vector)
+
+    if d == 0
+        return action_vector
+    else
+        for i in 1:d
+            push!(action_vector, 0)
+        end
+    end
+
+    return action_vector
+end

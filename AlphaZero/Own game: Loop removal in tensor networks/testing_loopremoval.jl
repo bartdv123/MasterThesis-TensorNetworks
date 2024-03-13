@@ -7,7 +7,7 @@ using GraphPlot                                                                 
 include("julia_functions.jl")                                                   # Paste a copy of julia_functions.jl inside of the directory
 #include("game_v4_graph in env.jl")
 #include("game_v4_graph not in env copy.jl")
-include("game_v7_exactDMRGdimensions.jl")
+include("game_v8_try_to_fix_exploration.jl")
 include("params1.jl")
 
 
@@ -16,5 +16,5 @@ experiment = AlphaZero.Experiment("Loopremoval", GameSpec(), params, Network, ne
 #AlphaZero.Scripts.test_game(experiment, n=1)
 println("Test passed!!! Starting AlphaZero environment")
 #AlphaZero.Scripts.explore(experiment)
-Scripts.dummy_run(experiment)
+#Scripts.dummy_run(experiment)
 AlphaZero.Scripts.train(experiment)
