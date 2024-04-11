@@ -221,10 +221,10 @@ function grouping_bondindices(tn, indices_to_group, printing=false)
     push!(tn, tensor2_new)
    
 
-    indices_mapping = Dict{String, String}()  # Specify the type of the keys and values
+    indices_mapping = Dict{Symbol, Symbol}()  # Specify the type of the keys and values
 
     for index in indices_to_group
-        indices_mapping[string(index)] = new_index
+        indices_mapping[Symbol(index)] = Symbol(new_index)
     end
 
     return indices_mapping

@@ -1,10 +1,10 @@
-#Adding the needed depedencies
-using QuacIO
-using Makie
-using GLMakie
-using Tenet
-using EinExprs
-Makie.inline!(true)
+using Plots
+using LinearAlgebra
 
-
-TN = TensorNetwork()
+size = 50
+x = rand(size,size)
+n = [i for i in 1:size]
+s = svdvals(x)
+s_max = maximum(s)
+display(scatter(n, s/s_max, yscale=:log10))
+#display(scatter(n[1:5], s[1:5]/s_max, yscale=:log10))

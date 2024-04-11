@@ -1,0 +1,6 @@
+enkele zaken:
+
+- middelen over L_list = [35, 40, 45, 50, 55, 60, 65]
+- weergeven van entanglement entropy at the central site of the mps chain Int(floor(L/2))
+- Verloop verklaart dat de benadering beter wordt (betere compressie)
+- Random initialisatie van de MPS heeft dit verloop qua entanglement entropy

@@ -179,7 +179,7 @@ end
 
 
 function update_action_mask!(env::GameEnv, action)                              # Mask for action which are not possible anymore after performing an action
-
+    #println("Updating game state")
     """
     An inplace modification function for the action mask.
     An action is uniquely indentified and parametrized by the index inside of the boolean_edge_availability
@@ -198,7 +198,7 @@ function update_action_mask!(env::GameEnv, action)                              
     
 
     show_plot = false
-    show_history = true
+    show_history = false
 
     # Updating the edge mask based on the currently present loops inside of the graph
     env.amask = env.boolean_action
@@ -220,14 +220,32 @@ function update_action_mask!(env::GameEnv, action)                              
 end
 
 
+GI.action_string(::GameSpec, a) = string(a)
+
+function GI.parse_action(g::GameSpec, str)
+    try
+        p = parse(Int, str)
+        1 <= p <= Int(7*18) ? p : nothing
+      
+    catch
+        nothing
+    end
+
+    println("Action registered = ", p)
+
+    
+end
+
+
 
 function GI.play!(env::GameEnv, action)
+    
     if mod(action, 18) == 0
         action = [action ÷ 18, 18]
     else
         action = [(action ÷ 18)+1, action - (action ÷ 18)*18]
     end
-    
+    #println("the action = ", action)
 
     """
     What should happen in the game state when the agent takes an action
@@ -238,7 +256,6 @@ function GI.play!(env::GameEnv, action)
     # performing an action.
     choosen_cycle = env.cycle_basis[action[1]]
     choosen_edge = env.list_of_edges[action[2]]
-
     isnothing(env.history) || push!(env.history, (choosen_cycle, choosen_edge))                        
     
     # Generate the current graph structure: before edge removal through DMRG
@@ -291,7 +308,6 @@ history = deepcopy(env.history)
 GI.white_playing(env::GameEnv) = true
 
 
-GI.action_string(::GameSpec, action) = string(action)
 
 
 GI.heuristic_value(env::GameEnv) = Float64(sum(env.reward_list))
@@ -315,29 +331,30 @@ end
 
 
 
-function GI.render(env::GameEnv, visualisation = false)
+function GI.render(env::GameEnv, visualisation = true)
 
 `   """
     What should happen when rendering a game environment
     """`
 
-    print("\n SIZED ADJACENCY REPRESENTATION: \n")
-    display(env.sized_adjacency)
+    print("\n weighted_edge_list: \n")
+    println(env.weighted_edge_list)
 
     if visualisation == true
-        current_graph_representation = env.graph
+        ### ACTION LIST OF CYCLES AND EDGE --> GAME PLAY Visualisation possibility
+        # This should be done without modifications to the play! function
+        current_graph_representation = Graphs.SimpleGraphs.SimpleGraph(env.current_adjacency)
         nodes = [node for node in vertices(current_graph_representation)]
-        display(gplot(current_graph_representation, nodelabel=nodes, nodefillc=colorant"springgreen3", layout=spring_layout))
+        #display the final tree that the network found
+        locs_x =     [4, 4, -5, -2, 0, 0, 2, 0, -3, -1, -6, -4]
+        locs_y =  -1*[-2, 1, -2, -1, 0, -2, 0, 3, 3, 1, 1, 0]
+        display(gplot(current_graph_representation, locs_x, locs_y, nodelabel=nodes, nodefillc=colorant"springgreen3"))
     end
 
-    print("\n ACTION MASK \n")
+    print("\n ACTION MASK: \n")
     println(env.amask)
-    print("\n REWARD LIST: \n")
-    println(env.reward_list)
+    print("\n REWARD LIST and CUMMULATIVE REWARDS: \n")
+    println(env.reward_list, sum(env.reward_list))
 
 end
-
-    
-
-### TESTING THE GAME INTERFACE IMPLEMENTATION
 

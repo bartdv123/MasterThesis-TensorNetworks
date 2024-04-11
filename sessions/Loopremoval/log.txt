@@ -1,0 +1,39 @@
+
+Loading environment from: sessions/Loopremoval
+
+Starting iteration 1
+
+  Starting self-play
+  
+    Generating 4 samples per second on average
+    Average exploration depth: 1.7
+    MCTS memory footprint per worker: 19.95MB
+    Experience buffer size: 35,000 (5,356 distinct boards)
+  
+  Starting learning
+  
+    Optimizing the loss
+    
+         Loss       Lv       Lp     Lreg     Linv       Hp    Hpnet
+      1353716993025169   0.1040   0.1640 -12.9658   2.4343   2.5383
+      1353716993025169   0.1040   0.0680 -12.9658   2.4343   2.5383
+    
+    Launching a checkpoint evaluation
+    
+      Average reward: +434153.67 (network replaced), redundancy: 26.8%
+  
+  Running benchmark: AlphaZero
+  
+    Average reward: -896244.75, redundancy: 47.9%
+  
+  Running benchmark: Network Only
+  
+    Average reward: -28690161850.27, redundancy: 25.9%
+
+Training completed
+
+
+Loading environment from: sessions/Loopremoval
+
+Starting interactive exploration
+
