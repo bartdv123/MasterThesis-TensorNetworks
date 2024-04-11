@@ -221,10 +221,10 @@ function grouping_bondindices(tn, indices_to_group, printing=false)
     push!(tn, tensor2_new)
    
 
-    indices_mapping = Dict{String, String}()  # Specify the type of the keys and values
+    indices_mapping = Dict{Symbol, Symbol}()  # Specify the type of the keys and values
 
     for index in indices_to_group
-        indices_mapping[string(index)] = new_index
+        indices_mapping[Symbol(index)] = Symbol(new_index)
     end
 
     return indices_mapping
@@ -961,7 +961,7 @@ end
 
 
 function edge_weights_update_DMRG_exact(old_graph, selected_cycle, selected_edge, weighted_edge_list)
-
+    
     """
     Exact DMRG dimensionality updating function. This function takes in the old
     graph structure, the selected_cycle as a list of vertices, the selected edge
@@ -979,6 +979,7 @@ function edge_weights_update_DMRG_exact(old_graph, selected_cycle, selected_edge
 
     # create a dictionary for easely accesing the dimensions of the edges inside of the network
     weights_dict = Dict((edge1, edge2) => weight for (edge1, edge2, weight) in weighted_edge_list)
+    old_virtual_weights = [weights_dict[virtual_edge] for virtual_edge in virtual_MPS_edges]
 
     # Note: Important in this whole ordeal in having the correct ordering of edges and danling edges
     # This allows one to compute the correct dimensions inside of the exact DMRG replacement
@@ -1039,7 +1040,6 @@ function edge_weights_update_DMRG_exact(old_graph, selected_cycle, selected_edge
 
     # usage of the ternary operator in julia -> julia-like-code
     sd_dangling_weights = [dangling_edge == nothing ? 1 : weights_dict[dangling_edge] for dangling_edge in sd_dangling_edges_cycle]
-
     new_virtual_weights = []
 
     # extract the new dimensions in the exact MPS representation based on
@@ -1048,7 +1048,9 @@ function edge_weights_update_DMRG_exact(old_graph, selected_cycle, selected_edge
     for (i,edge) in enumerate(sd_virtual_edges_cycle)
         # println("right dangling =", prod(sd_dangling_weights[1:i]), " Left dangling = ", prod(sd_dangling_weights[i+1:end]))
         # push the minimum of [( product of left dangling dimensions ), (product of right dangling dimensions)]
-        push!(new_virtual_weights,(edge[1], edge[2], min(prod(sd_dangling_weights[1:i]), prod(sd_dangling_weights[i+1:end]))))
+        virtual_bound = minimum(old_virtual_weights)                                        # edge case if statement to make sure that no edge_weights are set to 1 by mistake min(1, prod(all)) shouldn't quench the bond.
+
+        push!(new_virtual_weights,(edge[1], edge[2], max(min(prod(sd_dangling_weights[1:i]), prod(sd_dangling_weights[i+1:end])), virtual_bound)))
     end
     
     
@@ -1085,6 +1087,7 @@ function edge_weights_update_DRMG_chi_max(old_graph, selected_cycle, selected_ed
 
     # create a dictionary for easely accesing the dimensions of the edges inside of the network
     weights_dict = Dict((edge1, edge2) => weight for (edge1, edge2, weight) in weighted_edge_list)
+    old_virtual_weights = [weights_dict[virtual_edge] for virtual_edge in virtual_MPS_edges]
 
     # Note: Important in this whole ordeal in having the correct ordering of edges and danling edges
     # This allows one to compute the correct dimensions inside of the exact DMRG replacement
@@ -1153,8 +1156,9 @@ function edge_weights_update_DRMG_chi_max(old_graph, selected_cycle, selected_ed
 
     for (i,edge) in enumerate(sd_virtual_edges_cycle)
         # println("right dangling =", prod(sd_dangling_weights[1:i]), " Left dangling = ", prod(sd_dangling_weights[i+1:end]))
-        # push the minimum of [( product of left dangling dimensions ), (product of right dangling dimensions)]
-        push!(new_virtual_weights,(edge[1], edge[2], min(prod(sd_dangling_weights[1:i]), prod(sd_dangling_weights[i+1:end]), chi_max)))
+        virtual_bound = minimum(old_virtual_weights)                                        # edge case if statement to make sure that no edge_weights are set to 1 by mistake min(1, prod(all)) shouldn't quench the bond.
+
+        push!(new_virtual_weights,(edge[1], edge[2], max(min(prod(sd_dangling_weights[1:i]), prod(sd_dangling_weights[i+1:end]), chi_max), virtual_bound)))
     end
     
     
