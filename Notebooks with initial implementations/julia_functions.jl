@@ -1211,6 +1211,19 @@ function generate_entangled_mps(L, D, physical_size)
     entanglement_spectrum = TensorMap(sqrt(diagm([1/D for i in 1:D])), ℝ^D, ℝ^D)
 
     for i in 1:Int(L)
+        if i == 1
+            dims = (D*physical_size, 1)
+            QL = TensorMap(randisometry(dims), ℝ^(1) ⊗ ℝ^(physical_size), ℝ^D)
+            push!(tensor_list, QL)
+            continue
+        end
+
+        if i == L
+            dims = (D*physical_size, 1)
+            QR = TensorMap(convert(Array{Float64, 2}, transpose(randisometry(dims))), ℝ^D ⊗ ℝ^physical_size, ℝ^1)
+            push!(tensor_list, QR)
+            break
+        end
         if i < Int(floor(L/2))
 
         #append a random left canonical tensor
@@ -1244,5 +1257,10 @@ function generate_entangled_mps(L, D, physical_size)
  
     end
     S_max_mps = log(D)
+    #println([domain(tmap) for tmap in tensor_list])
+    #println([codomain(tmap) for tmap in tensor_list])    
+    
+
     return FiniteMPS([tmap for tmap in tensor_list]), S_max_mps
+
 end
