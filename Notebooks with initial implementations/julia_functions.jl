@@ -1187,3 +1187,62 @@ function zero_padding_to_size(action_vector, size)
 
     return action_vector
 end
+
+function generate_entangled_mps(L, D, physical_size)
+
+    """
+    Function which utilizes the mixed canonical form of a MPS to generate
+    a highly entangled MPS.
+    Returns this state as a FiniteMPS object and on top of that 
+    returns the S_max
+    """
+
+    # For mps of length L (asumme L is even) we want L/2 left canonical tensors
+    # spanning the basis for subspace A and L/2 right canonical tesnors spanning
+    # the basis for subspace B, between these two tensors should be a diagonal
+    # bond matrix with values all equal to 1/D.
+
+    #eg. MPS of length 8 = QL QL QL QL QL --- [bond matrix]---- QR QR QR QR
+    # to mps -> contract [bond matrix]^(1/2) to both sides of the mps, one into
+    # the left and one into the right
+
+    # An array of TensorMaps can be converted to a FiniteMPS! 
+    tensor_list = []
+    entanglement_spectrum = TensorMap(sqrt(diagm([1/D for i in 1:D])), ℝ^D, ℝ^D)
+
+    for i in 1:Int(L)
+        if i < Int(floor(L/2))
+
+        #append a random left canonical tensor
+        dims = (D*physical_size, D)
+        QL = TensorMap(randisometry(dims), ℝ^(D) ⊗ ℝ^(physical_size), ℝ^D)
+        push!(tensor_list, QL)
+
+        end
+        
+
+        if i == Int(floor(L/2))
+            dims = (D*physical_size, D)
+
+            QL = TensorMap(randisometry((D*physical_size, D)), ℝ^(D) ⊗ ℝ^(physical_size), ℝ^D)
+            QR = TensorMap(convert(Array{Float64, 2}, transpose(randisometry(dims))), ℝ^D ⊗ ℝ^physical_size, ℝ^D)
+            #entanglement_spectrum = TensorMap(sqrt(diagm([1/D for i in 1:D])), ℝ^D, ℝ^D)
+            QL_mid = QL * entanglement_spectrum
+            QR_mid =  QR * entanglement_spectrum
+
+            push!(tensor_list, QL_mid)
+            push!(tensor_list, QR_mid)
+
+        end
+        
+        if i > Int(floor(L/2))+1
+            dims = (D*physical_size, D)
+
+            QR = TensorMap(convert(Array{Float64, 2}, transpose(randisometry(dims))), ℝ^D ⊗ ℝ^physical_size, ℝ^D)
+            push!(tensor_list, QR)
+        end
+ 
+    end
+    S_max_mps = log(D)
+    return FiniteMPS([tmap for tmap in tensor_list]), S_max_mps
+end
