@@ -794,7 +794,7 @@ function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edg
         end
     end
 
-    return maximum(chi_in_choosen_MPS)^5
+    return length(loop_active)*maximum(chi_in_choosen_MPS)^3
 end
 
 
@@ -1264,3 +1264,91 @@ function generate_entangled_mps(L, D, physical_size)
     return FiniteMPS([tmap for tmap in tensor_list]), S_max_mps
 
 end
+
+
+function Trivertex_classical_ising_partition_function(Nx::Int, Ny::Int, beta, plotting=false)
+    
+    """ 
+    Function which creates a ferromagnetic (j=1) classical ising model partition function on a square grid.
+    Takes in the sizes of the IsingModel Nx, Ny and β.
+    Function returns a trivertex Tenet tensor network, ready to be used in Alpha
+    Zero.
+    """
+
+    # boltzman matrix
+    B = [exp(beta) exp(-beta); exp(-beta) exp(beta)]
+    sqrtB = convert(Matrix{Float64}, B^(1/2)) ### USE THE CONVERT BECAUSE JULIA HAS ALL THE TYPES OF OBJECTS? -> works
+    # sqrtB = B^(1/2) # -> doesn't work -> Symetric? 
+
+    # creating the building blocks of the ising tensor network
+    # getting to know einsum notation in Jutho's tensor operations
+
+    # Generating the relevant data arrays -> A2 = corner Tensor, A3 = edge Tensor, A4 = bulk Tensor
+    @tensor begin
+        A2[i,j] := sqrtB[i,k]*sqrtB[k,j] #contraction along k
+        
+        ### JULIA HAS INDICES STARTING AT ONE !!!!!!!!!!!!!!!!!!!!!!! STOP FORGETTING
+        A3[i,j,k] := sqrtB[:,1][i]*sqrtB[:,1][j]*sqrtB[:,1][k] + sqrtB[:,2][i]*sqrtB[:,2][j]*sqrtB[:,2][k] #is this the easiest way to do an outer product?
+        A4[i,j,k,l] := sqrtB[:,1][i]*sqrtB[:,1][j]*sqrtB[:,1][k]*sqrtB[:,1][l] + sqrtB[:,2][i]*sqrtB[:,2][j]*sqrtB[:,2][k]*sqrtB[:,2][l]
+
+    end 
+
+
+    tensors = []
+
+    ## the layout structure --> Use the Graphs.jl package for underlying functionality... Don't code it all yourself
+
+    n_tensors = Nx*Ny
+    n_edges = 2*Nx*Ny - Nx - Ny
+    G = Graphs.grid([Nx,Ny])
+    nvertices = nv(G) # number of vertices
+    nedges = ne(G)    # number of edges
+
+    nodes = [node for node in vertices(G)]
+    nodes_labels = [[i,j] for i in 1:Nx for j in 1:Ny]
+    nodes_map = Dict(zip(nodes, nodes_labels)) # Create a mapping dict
+    edgesgraph = [edge for edge in edges(G)]
+    edges_labels = [Symbol(edge) for edge in 1:nedges]
+    edges_map = Dict(zip(edgesgraph, edges_labels))
+
+    if plotting == true
+        display(gplot(G, nodelabel=nodes, edgelabel=1:n_edges, layout=spectral_layout))
+    end
+
+
+    
+    # Generating the tensors inside of the network
+    for source in vertices(G)
+        inds = Tuple([edges_map[edge] for edge in edges(G) if source in([src(edge), dst(edge)])])
+        if length(inds) == 2
+            push!(tensors, Tensor(A2, inds))
+        end
+        if length(inds) == 3
+            push!(tensors, Tensor(A3, inds))
+        end
+        if length(inds) == 4
+            push!(tensors, Tensor(A4, inds))
+        end   
+        
+    end
+
+    ising_network = TensorNetwork(tensors)
+    #println(length(Tenet.tensors(ising_network)))
+    for tensor in Tenet.tensors(ising_network)
+        rank = length(inds(tensor))
+        if rank > 3 #remove the bulk tesnors and replace them with new SVD-ed tensors
+            pop!(ising_network, tensor)
+            U,S,V = LinearAlgebra.svd(tensor, left_inds=inds(tensor)[1:2])
+            push!(ising_network, U)
+            push!(ising_network, S)
+            push!(ising_network, V)
+        end
+    end
+
+    return ising_network
+
+    # Generate a TensorNetwork based on all the tensors in the list of tensors
+    # Return this as a Tenet tensor network object
+end
+
+
