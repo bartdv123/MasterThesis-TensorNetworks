@@ -3,6 +3,8 @@ import AlphaZero.GI                                                             
 using Graphs                                                                    # Nice and efficienct way of representing the connectivity in the tensor_network
 using GraphPlot                                                                 # Graph visualisation package
 using Tenet                                                                     # TensorNetwork Package
+using FileIO
+using JLD2
 
 include("julia_functions.jl")                                                   # Paste a copy of julia_functions.jl inside of the directory
 
@@ -46,7 +48,7 @@ GI.spec(::GameEnv) = GameSpec()
 # global variables
 global edge_count
 global amount_loops
-global TN = generate_random_quantum_circuit(6, 7, 1)
+global TN, graph, tv_map, ie_map, weighted_edge_list, ei_map = FileIO.load("transport variables/export_to_alphazero.jld2","A2")
 global locs_x
 global locs_y
 
@@ -61,8 +63,6 @@ function GI.init(::GameSpec)
     Return an initialized GameEnv
     """
 
-
-    graph, tv_map, ie_map, weighted_edge_list, ei_map = extract_graph_representation(TN, false) # Extract the graphs.jl structure from the Tenet.TensorNetwork
     nodes = [node for node in vertices(graph)]
     layout = spectral_layout(graph)
     global locs_x = layout[1]

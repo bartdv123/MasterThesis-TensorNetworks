@@ -618,6 +618,7 @@ function extract_graph_representation(TN, printing=false)
 
     pairs = collect(combinations([node for node in vertices(g)], 2))
     for possible_connection in pairs
+        #check if tensor at possible v1
         v1 = possible_connection[1]
         v2 = possible_connection[2]
         T_v1 = tensor_vertex_map[v1]

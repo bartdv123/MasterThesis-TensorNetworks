@@ -1,10 +1,16 @@
 using Plots
 using LinearAlgebra
+using Tenet
 
-size = 50
-x = rand(size,size)
-n = [i for i in 1:size]
-s = svdvals(x)
-s_max = maximum(s)
-display(scatter(n, s/s_max, yscale=:log10))
-#display(scatter(n[1:5], s[1:5]/s_max, yscale=:log10))
+a = rand(5)
+println(typeof(a))
+println(typeof(rand(3,3)))
+println(typeof(rand(3,3,3)))
+a = rand(3,3, 3, 3)
+
+at = Tenet.Tensor(a, (:i, :j, :k, :l))
+println(typeof(at))
+U, S, V = LinearAlgebra.svd(at, left_inds=[:i])
+display(S)
+b = rand(3)
+bt = Tenet.Tensor(b, [:i])

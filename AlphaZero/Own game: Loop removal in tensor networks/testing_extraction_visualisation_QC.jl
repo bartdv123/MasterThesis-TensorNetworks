@@ -2,7 +2,8 @@ using AlphaZero                                                                 
 using Tenet                                                                     # TensorNetwork Package
 using Graphs                                                                    # Nice and efficienct way of representing the connectivity in the tensor_network
 using GraphPlot                                                                 # Graph visualisation package
-
+using FileIO
+using JLD2
 
 include("julia_functions.jl")                                                   # Paste a copy of julia_functions.jl inside of the directory
 #include("game_v4_graph in env.jl")
@@ -26,7 +27,11 @@ trace = play_game(gspec, p; flip_probability=0.)
 
 print("\n\n\n_____   The agent has reached the final position  ___________\n")
 taken_path = last(trace.states).history
+taken_path = [action for action in taken_path]
 println("The path taken by the agent is = ", taken_path)
+
+FileIO.save("transport variables/taken_path.jld2","taken_path", taken_path)
+
 rewards_list = last(trace.states).reward_list
 reward =  sum(rewards_list)
 println("The obtained rewards throughout the path = ", rewards_list)
