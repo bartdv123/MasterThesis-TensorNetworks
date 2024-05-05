@@ -794,7 +794,7 @@ function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edg
         end
     end
 
-    return length(loop_active)*maximum(chi_in_choosen_MPS)^3
+    return length(loop_active)*maximum(chi_in_choosen_MPS)^2
 end
 
 
@@ -911,6 +911,44 @@ function display_selected_action_ising(graph, cycle, choosen_edge)
     
 end
 
+
+function display_selected_action_QC(graph, cycle, choosen_edge, locs_x, locs_y)
+
+    """
+    This function takes in a graph from graphs.jl, 
+    a cycle inside from the cycle basis of the graph and a choosen edge
+    on this graph which is the where the cut is made.
+    By generating a graphplot with a color code the selected edge and underlying
+    MPS structure for appling DMRG is visualized.
+    """
+
+    nodes = [node for node in vertices(graph)]
+    loop_active, dang_active = extract_edge_representation_and_physical_indices(graph, cycle)
+    colors_for_edges = []
+    for edge in edges(graph)
+        s = src(edge)
+        d = dst(edge)
+        if Tuple((Int(s), Int(d))) == choosen_edge
+            push!(colors_for_edges, colorant"green2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in loop_active
+            push!(colors_for_edges, colorant"seagreen2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in dang_active
+            push!(colors_for_edges, colorant"darkolivegreen")
+            continue
+        end
+        
+        push!(colors_for_edges, colorant"grey")
+      
+    end
+
+    display(gplot(graph, locs_x, locs_y, edgestrokec = colors_for_edges, nodelabel=nodes, nodefillc=colorant"springgreen3"))
+    
+end
+
 function minimum_cycle_basis(graph)
 
     """
@@ -974,6 +1012,7 @@ function create_actionmatrix(graph, all_edges)
             end
         end
     end
+
     return A
 end
 
@@ -1008,11 +1047,11 @@ function edge_weights_update_DMRG_exact(old_graph, selected_cycle, selected_edge
     network it computes the updated edge weights and returns a new updated
     weighted_edge_list.
     """
+    
 
     # extract edges inside of the loop and the ones which are dangling from the loop
     loop_active, dang_active = extract_edge_representation_and_physical_indices(old_graph, selected_cycle)
     virtual_MPS_edges = filter!(x -> x != selected_edge, loop_active)           # filter out the choosen edge which is cut 
-
 
     # create a dictionary for easely accesing the dimensions of the edges inside of the network
     weights_dict = Dict((edge1, edge2) => weight for (edge1, edge2, weight) in weighted_edge_list)
@@ -1037,7 +1076,7 @@ function edge_weights_update_DMRG_exact(old_graph, selected_cycle, selected_edge
     # AND RIGHT PRODUCT CAN BE DEFINED
     loop_length = length(virtual_MPS_edges)
 
-
+    
     # walk the loop
     for i in 1:loop_length
         chosen_edge = [Tuple(sort([source, drain])) for (source, drain) in virtual_MPS_edges if source == current_position || drain == current_position][1]
@@ -1372,4 +1411,149 @@ function Trivertex_classical_ising_partition_function(Nx::Int, Ny::Int, beta, pl
     # Return this as a Tenet tensor network object
 end
 
+### CODE FOR QUANTUM COMPUTER
 
+# some two qubit gates
+
+function xx_interaction(theta)
+    """
+    theta continious parameter θ = [0, 4π]
+    """
+    c = cos(theta/2)
+    s = sin(theta/2)
+    gate = [c 0 0 -im*s ; 0 c -im*s 0; 0 -im*s c 0; -im*s 0 0 c]
+    return gate
+end
+
+function yy_interaction(theta)
+    """
+    theta continious parameter θ = [0, 4π]
+    """
+    c = cos(theta/2)
+    s = sin(theta/2)
+    gate = [c 0 0 im*s ; 0 c -im*s 0; 0 -im*s c 0; im*s 0 0 c]
+    return gate
+end
+
+function zz_interaction(theta)
+    """
+    theta continious parameter θ = [0, 4π]
+    """
+    p = exp(+im*theta/2)
+    m = exp(-im*theta/2)
+    gate = [m 0 0 0; 0 p 0 0; 0 0 p 0; 0 0 0 m]
+    return gate
+end
+
+
+function single_gate_ry(theta)
+    """
+    Create a rotation about the y axis: theta [0, 4π]
+    """
+
+    c = cos(theta/2)
+    s = sin(theta/2)
+
+    gate = [c -s; s c]
+
+    return gate
+
+end
+
+function rel_phase(theta)
+    """
+    Create a phase shift: theta [0, 2π]
+    """
+    gate = [1 0; 0 exp(im*theta)]
+    return gate
+end
+
+function hadamard()
+    gate = 1/sqrt(2)*[1 1; 1 -1]
+    return gate
+end
+
+function xnot()
+    gate = [0 1 ; 1 0]
+    return gate
+end
+
+function sq_gt(input_data, index_in, index_out)
+    """
+    single qubit gate tensor
+    input data is the gate which is applied, index_in and index_out are 2 dimensional index-symbols
+    """
+    single_gate_tensor = Tenet.Tensor(input_data, [index_in, index_out])
+    return single_gate_tensor
+end
+
+function tq_gt(input_data, index_in, index_out)
+    """
+    double qubit gate tensor
+    """
+    tensorized_data = reshape(input_data, 2, 2, 2, 2)
+    double_gate_tensor = Tenet.Tensor(tensorized_data, [index_in..., index_out...])
+    return double_gate_tensor
+end
+
+function generate_random_quantum_circuit(num_q, layers, theta)
+    #symbols from 1 - 1000
+    unique_symbols = [Symbol(i) for i in 1:1000]
+    # prep_z state for the initial_state: all qubits in |0>
+    initial_state = [1, 0]
+    tensors_in_network = []
+    for i in 1:num_q
+        push!(tensors_in_network, Tenet.Tensor(initial_state, [popfirst!(unique_symbols)]))
+    end
+    previous_layer_inds = [inds(tensor)[1] for tensor in tensors_in_network[end-num_q+1:end]]
+    
+    for j in 1:layers
+        # add a layer of two qubit tensors entangling all pairs
+        if j % 2 == 1
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            for pair in Iterators.partition(previous_layer_inds, 2)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [popfirst!(unique_symbols), popfirst!(unique_symbols)]))
+            end
+            previous_layer_inds = [id for tensor in tensors_in_network[end-Int(num_q/2)+1:end] for id in inds(tensor)[3:4]]
+            #println(previous_layer_inds)
+        end
+        if j % 2 == 0
+            theta = rand(0:4*pi)
+            datas1 = [single_gate_ry(theta), rel_phase(theta/2), hadamard(), xnot()]
+            datas2 = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            id1 = popfirst!(previous_layer_inds)
+            push!(tensors_in_network, sq_gt(rand(datas1), id1, popfirst!(unique_symbols)))
+            for pair in Iterators.partition(previous_layer_inds[1:Int(num_q-2)], 2)
+                push!(tensors_in_network, tq_gt(rand(datas2), pair, [popfirst!(unique_symbols), popfirst!(unique_symbols)]))
+            end
+            id10 = previous_layer_inds[end]
+            push!(tensors_in_network, sq_gt(rand(datas1), id10, popfirst!(unique_symbols)))
+            previous_layer_inds = [id for tensor in tensors_in_network[end-Int(num_q/2)+1:end-1] for id in inds(tensor)[3:4]]
+            #println("previous_layer_inds = ", previous_layer_inds)
+            pushfirst!(previous_layer_inds, inds(tensors_in_network[end-Int(num_q/2)])[2])
+            push!(previous_layer_inds, inds(tensors_in_network[end])[2])
+            #println(previous_layer_inds)
+        end
+    
+    end
+    # no collapse at the
+    # for i in 1:num_q
+    #     push!(tensors_in_network, Tenet.Tensor(initial_state, [popfirst!(previous_layer_inds)]))
+    # end
+
+
+    #extract indices from two qubit gate- tensors setup
+    #println(length(tensors_in_network))
+    TN = Tenet.TensorNetwork(tensors_in_network)
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank > 3 #remove the bulk tesnors and replace them with new QR  tensors
+            pop!(TN, tensor)
+            Q, R = LinearAlgebra.qr(tensor, left_inds=inds(tensor)[1:2])
+            push!(TN, Q)
+            push!(TN, R)
+        end
+    end
+    return TN
+
+end
