@@ -29,6 +29,7 @@ print("\n\n\n_____   The agent has reached the final position  ___________\n")
 taken_path = last(trace.states).history
 taken_path = [action for action in taken_path]
 println("The path taken by the agent is = ", taken_path)
+println("Respective loop lengths = ", [length(taken[1]) for taken in taken_path])
 
 FileIO.save("transport variables/taken_path.jld2","taken_path", taken_path)
 
