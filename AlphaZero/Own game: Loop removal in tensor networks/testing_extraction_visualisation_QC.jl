@@ -82,7 +82,7 @@ function visualise_gameplay(state_traces)
         
 end
 
-visualise_gameplay(trace.states)
+#visualise_gameplay(trace.states)
 
 function sized_adjacency_visualisation(state_traces)
     for (j, state) in enumerate(state_traces)
