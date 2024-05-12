@@ -426,7 +426,7 @@ function contraction_step(tn, bond_index)
     pop!(tn, tensor1)
     pop!(tn, tensor2)
     push!(tn, contracted)
-        
+    
     
 
 end
