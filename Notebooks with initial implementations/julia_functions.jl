@@ -617,6 +617,7 @@ function extract_graph_representation(TN, printing=false)
     edge_index_map = Dict{}()                                                   # dictionary which maps (source, drain) tuples to tensor network indices
 
     pairs = collect(combinations([node for node in vertices(g)], 2))
+
     for possible_connection in pairs
         v1 = possible_connection[1]
         v2 = possible_connection[2]
@@ -632,7 +633,6 @@ function extract_graph_representation(TN, printing=false)
             edge_index_map[(v1,v2)] = index_intersection
         end
     end
-
     if printing == true
         display(gplot(g, nodelabel=[node for node in vertices(g)]))
         println(index_edge_map)

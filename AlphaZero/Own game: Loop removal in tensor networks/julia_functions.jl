@@ -9,6 +9,7 @@ using TensorOperations
 using LinearAlgebra
 using Graphs
 using Colors
+using Random
 using GraphPlot
 using EinExprs
 using Combinatorics
@@ -1382,13 +1383,13 @@ function Trivertex_classical_ising_partition_function(Nx::Int, Ny::Int, beta, pl
     for source in vertices(G)
         inds = Tuple([edges_map[edge] for edge in edges(G) if source in([src(edge), dst(edge)])])
         if length(inds) == 2
-            push!(tensors, Tensor(A2, inds))
+            push!(tensors, Tenet.Tensor(A2, inds))
         end
         if length(inds) == 3
-            push!(tensors, Tensor(A3, inds))
+            push!(tensors, Tenet.Tensor(A3, inds))
         end
         if length(inds) == 4
-            push!(tensors, Tensor(A4, inds))
+            push!(tensors, Tenet.Tensor(A4, inds))
         end   
         
     end
@@ -1554,7 +1555,461 @@ function generate_random_quantum_circuit(num_q, layers, theta)
             push!(TN, Q)
             push!(TN, R)
         end
+    
     end
+
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank == 2
+            # prememtively contract one of the connecting indices
+            if inds(tensor)[1] ∈ inds(TN)
+                println("inside")
+                contraction_step(TN, [inds(tensor)[1]])
+            end
+            # trivertex netwrok structure
+        end
+    end
+
+    return TN
+
+end
+
+function generate_random_quantum_circuit_2d_2x2(num_q_x, num_q_y, layers, theta)
+
+    """
+    Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
+    and y directions.
+    Apply nearest neighbour 2 qubit gates --> x direction and y direction in a 
+    staggered fashion.
+    """
+
+    #symbols from 1 - 1000
+    unique_symbols = [Symbol(i) for i in 1:1000]
+    # prep_z state for the initial_state: all qubits in |0>
+    initial_state = [1, 0]
+    tensors_in_network = []
+
+    previous_layer_inds = Matrix{Symbol}(undef, num_q_x, num_q_y)
+
+    # initial state
+    for i in 1:num_q_x
+        for j in 1:num_q_y
+            id = popfirst!(unique_symbols)
+            push!(tensors_in_network, Tenet.Tensor(initial_state, [id]))
+            previous_layer_inds[i,j] = id
+        end
+    end
+
+
+    for j in 1:layers
+        # println("working on layer $j")
+        # add x direction gates
+
+        if j % 2 == 1
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+            for j in 1:num_q_y
+                for i in 1:2:(num_q_x-1)
+                    
+                    pair = [previous_layer_inds[i, j], previous_layer_inds[i+1, j]]
+                    id1 = popfirst!(unique_symbols)
+                    id2 = popfirst!(unique_symbols)
+                    push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                    tensor_index_matrix_new[i, j] = id1
+                    tensor_index_matrix_new[i+1, j] = id2
+                end
+            end
+            previous_layer_inds = tensor_index_matrix_new
+        end
+
+        # add y direction gates
+
+        if j % 2 == 0
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+            for j in 1:num_q_x  
+                for i in 1:Int(num_q_y/2)
+
+                    pair = [previous_layer_inds[j, i], previous_layer_inds[j, num_q_y-i+1]]
+                    id1 = popfirst!(unique_symbols)
+                    id2 = popfirst!(unique_symbols)
+                    push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                    tensor_index_matrix_new[j, i] = id1
+                    tensor_index_matrix_new[j, num_q_y-i+1] = id2
+                end
+            end
+            previous_layer_inds = tensor_index_matrix_new
+
+        end
+
+    end
+    
+    TN = Tenet.TensorNetwork(tensors_in_network)
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank > 3 #remove the bulk tesnors and replace them with new QR  tensors
+            pop!(TN, tensor)
+            Q, R = LinearAlgebra.qr(tensor, left_inds=inds(tensor)[1:2])
+            push!(TN, Q)
+            push!(TN, R)
+        end
+    
+    end
+
+    return TN
+
+end
+
+function generate_random_quantum_circuit_2d_4x4(num_q_x, num_q_y, layers, theta)
+
+    """
+    Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
+    and y directions.
+    Apply nearest neighbour 2 qubit gates --> x direction and y direction in a 
+    staggered fashion.
+    """
+
+    unique_symbols = [Symbol(i) for i in 1:1000]
+
+    initial_state = [1, 0]
+    tensors_in_network = []
+
+    previous_layer_inds = Matrix{Symbol}(undef, num_q_x, num_q_y)
+
+    # Initial state
+    for i in 1:num_q_x
+        for j in 1:num_q_y
+            id = popfirst!(unique_symbols)
+            push!(tensors_in_network, Tenet.Tensor(initial_state, [id]))
+            previous_layer_inds[i,j] = id
+        end
+    end
+
+
+    global x_count = 0 # staggering in x and y
+    global y_count = 0 # staggering in x and y
+
+    for l in 1:layers
+
+        # add x direction gates
+        if l % 2 == 1
+            if x_count % 2 == 0
+                datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+                tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+                for j in 1:num_q_y
+                    for i in 1:2:(num_q_x-1)
+                        pair = [previous_layer_inds[i, j], previous_layer_inds[i+1, j]]
+                        id1 = popfirst!(unique_symbols)
+                        id2 = popfirst!(unique_symbols)
+                        push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                        tensor_index_matrix_new[i, j] = id1
+                        tensor_index_matrix_new[i+1, j] = id2
+                    end
+                end
+                previous_layer_inds = tensor_index_matrix_new
+                x_count += 1
+            end
+
+            if x_count % 2 == 1
+                datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+                tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+                for j in 1:num_q_y
+                    for i in 1:Int(num_q_x/2)
+                        pair = [previous_layer_inds[i, j], previous_layer_inds[num_q_x-i+1, j]]
+                        id1 = popfirst!(unique_symbols)
+                        id2 = popfirst!(unique_symbols)
+                        push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                        tensor_index_matrix_new[i, j] = id1
+                        tensor_index_matrix_new[num_q_x-i+1, j] = id2
+                    end
+                end
+                previous_layer_inds = tensor_index_matrix_new
+                x_count += 1
+            end
+        end
+        # add y direction gates
+
+        if l % 2 == 0
+            if y_count % 2 == 0
+                datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+                tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+                for j in 1:num_q_x  
+                    for i in 1:Int(num_q_y/2)
+                        pair = [previous_layer_inds[j, i], previous_layer_inds[j, num_q_y-i+1]]
+                        id1 = popfirst!(unique_symbols)
+                        id2 = popfirst!(unique_symbols)
+                        push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                        tensor_index_matrix_new[j, i] = id1
+                        tensor_index_matrix_new[j, num_q_y-i+1] = id2
+                    end
+                end
+                previous_layer_inds = tensor_index_matrix_new
+
+                y_count += 1
+            end
+        
+
+            if y_count % 2 == 1
+                datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+                tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+                for j in 1:num_q_x  
+                    for i in 1:2:(num_q_y-1)
+                        pair = [previous_layer_inds[j, i], previous_layer_inds[j, i+1]]
+                        id1 = popfirst!(unique_symbols)
+                        id2 = popfirst!(unique_symbols)
+                        push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                        tensor_index_matrix_new[j, i] = id1
+                        tensor_index_matrix_new[j, i+1] = id2
+                    end
+                end
+                previous_layer_inds = tensor_index_matrix_new
+
+                y_count += 1
+            end
+
+        end
+
+        
+
+    end
+    
+    TN = Tenet.TensorNetwork(tensors_in_network)
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank > 3 #remove the bulk tesnors and replace them with new QR  tensors
+            pop!(TN, tensor)
+            Q, R = LinearAlgebra.qr(tensor, left_inds=inds(tensor)[1:2])
+            push!(TN, Q)
+            push!(TN, R)
+        end
+    
+    end
+
+    return TN
+
+end
+
+function select_pairs_and_collect_unused(matrix)
+    pairs = []
+    used_elements = []
+    list = vec(matrix)
+    # Create a list of all possible indices
+    indices = collect(1:length(list))
+    # Shuffle the indices to ensure randomness
+    shuffled_indices = shuffle(indices)
+
+    # Iterate over shuffled indices in pairs
+    for i in 1:2:length(shuffled_indices)-1
+        idx1 = shuffled_indices[i]
+        idx2 = shuffled_indices[i+1]
+        element1 = list[idx1]
+        element2 = list[idx2]
+        push!(pairs, [element1, element2])
+        # Store used elements to handle the odd cases
+        push!(used_elements, element1)
+        push!(used_elements, element2)
+    end
+
+    # Find unused elements in the original matrix
+    unused_elements = setdiff(vec(matrix), used_elements)
+
+    return pairs, unused_elements
+end
+
+function generate_random_quantum_circuit_2d_random_connections(num_q_x, num_q_y, layers, theta)
+
+    """
+    Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
+    and y directions.
+    Apply nearest neighbour 2 qubit gates --> x direction and y direction in a 
+    staggered fashion.
+    """
+
+    unique_symbols = [Symbol(i) for i in 1:1000]
+
+    initial_state = [1, 0]
+    tensors_in_network = []
+
+    previous_layer_inds = Matrix{Symbol}(undef, num_q_x, num_q_y)
+
+    # Initial state
+    for i in 1:num_q_x
+        for j in 1:num_q_y
+            id = popfirst!(unique_symbols)
+            push!(tensors_in_network, Tenet.Tensor(initial_state, [id]))
+            previous_layer_inds[i,j] = id
+        end
+    end    
+
+    for l in 1:layers
+        # add x direction gates
+        pairs, unused = select_pairs_and_collect_unused(previous_layer_inds)
+           
+        datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+        tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+        if length(unused) == 0
+            for pair in pairs
+                i1 = findfirst(x -> x == pair[1], previous_layer_inds)
+                i2 = findfirst(x -> x == pair[2], previous_layer_inds)
+                id1 = popfirst!(unique_symbols)
+                id2 = popfirst!(unique_symbols)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                tensor_index_matrix_new[i1] = id1
+                tensor_index_matrix_new[i2] = id2
+            end 
+            previous_layer_inds = tensor_index_matrix_new
+        end
+        if length(unused) == 1
+            for pair in pairs
+                i1 = findfirst(x -> x == pair[1], previous_layer_inds)
+                i2 = findfirst(x -> x == pair[2], previous_layer_inds)
+                id1 = popfirst!(unique_symbols)
+                id2 = popfirst!(unique_symbols)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                tensor_index_matrix_new[i1] = id1
+                tensor_index_matrix_new[i2] = id2
+            end 
+            i1 = findfirst(x -> x == unused[1], previous_layer_inds)
+            tensor_index_matrix_new[i1] = unused[1]
+            previous_layer_inds = tensor_index_matrix_new
+        end
+    end
+    
+    TN = Tenet.TensorNetwork(tensors_in_network)
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank > 3 #remove the bulk tesnors and replace them with new QR  tensors
+            pop!(TN, tensor)
+            Q, R = LinearAlgebra.qr(tensor, left_inds=inds(tensor)[1:2])
+            push!(TN, Q)
+            push!(TN, R)
+        end
+    
+    end
+
+    return TN
+
+end
+
+
+function generate_random_quantum_circuit_2d_2xn(num_q_x, num_q_y, layers, theta)
+
+    """
+    Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
+    and y directions.
+    Apply nearest neighbour 2 qubit gates --> x direction and y direction in a 
+    staggered fashion.
+    """
+
+    unique_symbols = [Symbol(i) for i in 1:1000]
+
+    initial_state = [1, 0]
+    tensors_in_network = []
+
+    previous_layer_inds = Matrix{Symbol}(undef, num_q_x, num_q_y)
+
+    # Initial state
+    for i in 1:num_q_x
+        for j in 1:num_q_y
+            id = popfirst!(unique_symbols)
+            push!(tensors_in_network, Tenet.Tensor(initial_state, [id]))
+            previous_layer_inds[i,j] = id
+        end
+    end
+
+    
+
+    for l in 1:layers
+
+        # first type of staggered gates
+
+        if l % 3 == 1
+            pairs = []
+            for j in 1:num_q_y
+                if j < num_q_y
+                    push!(pairs, [previous_layer_inds[1, j], previous_layer_inds[end, (j+1)]])
+                else
+                    push!(pairs, [previous_layer_inds[1, j], previous_layer_inds[end, 1]])
+                end
+            end
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+            for pair in pairs
+                i1 = findfirst(x -> x == pair[1], previous_layer_inds)
+                i2 = findfirst(x -> x == pair[2], previous_layer_inds)
+                id1 = popfirst!(unique_symbols)
+                id2 = popfirst!(unique_symbols)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                tensor_index_matrix_new[i1] = id1
+                tensor_index_matrix_new[i2] = id2
+            end
+            previous_layer_inds = tensor_index_matrix_new
+        end
+
+        if l % 3 == 2
+            pairs = []
+            for j in 1:num_q_y
+                push!(pairs, [previous_layer_inds[1, j], previous_layer_inds[end, (j)]])
+            end
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+            for pair in pairs
+                i1 = findfirst(x -> x == pair[1], previous_layer_inds)
+                i2 = findfirst(x -> x == pair[2], previous_layer_inds)
+                id1 = popfirst!(unique_symbols)
+                id2 = popfirst!(unique_symbols)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                tensor_index_matrix_new[i1] = id1
+                tensor_index_matrix_new[i2] = id2
+            end
+            previous_layer_inds = tensor_index_matrix_new
+        end
+
+
+        if l % 3 == 0
+            pairs = []
+            for j in 1:num_q_y
+                if j < num_q_y
+                    push!(pairs, [previous_layer_inds[1, j+1], previous_layer_inds[end, (j)]])
+                else
+                    push!(pairs, [previous_layer_inds[1, 1], previous_layer_inds[end, j]])
+                end
+            end
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+            for pair in pairs
+                i1 = findfirst(x -> x == pair[1], previous_layer_inds)
+                i2 = findfirst(x -> x == pair[2], previous_layer_inds)
+                id1 = popfirst!(unique_symbols)
+                id2 = popfirst!(unique_symbols)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                tensor_index_matrix_new[i1] = id1
+                tensor_index_matrix_new[i2] = id2
+            end
+            previous_layer_inds = tensor_index_matrix_new
+        end
+        
+        
+    end
+    
+    TN = Tenet.TensorNetwork(tensors_in_network)
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank > 3 #remove the bulk tesnors and replace them with new QR  tensors
+            pop!(TN, tensor)
+            Q, R = LinearAlgebra.qr(tensor, left_inds=inds(tensor)[1:2])
+            push!(TN, Q)
+            push!(TN, R)
+        end
+    
+    end
+    
+
     return TN
 
 end

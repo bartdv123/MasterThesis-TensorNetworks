@@ -19,8 +19,29 @@ println("Test passed!!! Starting AlphaZero environment")
 #AlphaZero.Scripts.explore(experiment)
 #rScripts.dummy_run(experiment)
 #AlphaZero.Scripts.train(experiment)
+
+
+#  AlphaZero Player
 Ses = Session(experiment)
-p = AlphaZeroPlayer(Ses.env)
+# p = AlphaZeroPlayer(Ses.env)
+# gspec = Ses.env.gspec
+
+# trace = play_game(gspec, p; flip_probability=0.)
+
+# print("\n\n\n_____   The agent has reached the final position  ___________\n")
+# taken_path = last(trace.states).history
+# taken_path = [action for action in taken_path]
+# println("Respective loop lengths = ", [length(taken[1]) for taken in taken_path])
+
+# FileIO.save("transport variables/taken_path.jld2","taken_path", taken_path)
+
+# rewards_list = last(trace.states).reward_list
+# reward =  sum(rewards_list)
+# println("The obtained rewards throughout the AlphaZero path = ", rewards_list, reward)
+
+
+# RandomPlayer
+p = AlphaZero.RandomPlayer()
 gspec = Ses.env.gspec
 
 trace = play_game(gspec, p; flip_probability=0.)
@@ -28,20 +49,19 @@ trace = play_game(gspec, p; flip_probability=0.)
 print("\n\n\n_____   The agent has reached the final position  ___________\n")
 taken_path = last(trace.states).history
 taken_path = [action for action in taken_path]
-println("The path taken by the agent is = ", taken_path)
 println("Respective loop lengths = ", [length(taken[1]) for taken in taken_path])
 
-FileIO.save("transport variables/taken_path.jld2","taken_path", taken_path)
 
 rewards_list = last(trace.states).reward_list
 reward =  sum(rewards_list)
-println("The obtained rewards throughout the path = ", rewards_list)
+println("The obtained rewards throughout the random path = ", rewards_list, reward)
 
 ### Trying to extract_graph_representation of the initial state for visualisation purpose
 adj_m = first(trace.states).current_adjacency
 println("the length of the trace = ", length(trace.states))
 # the graph representation can be extracted from the trace.states!!!
 
+FileIO.save("transport variables/taken_path.jld2","taken_path", taken_path)
 
 function visualise_gameplay(state_traces)
 
@@ -83,7 +103,6 @@ function visualise_gameplay(state_traces)
         
 end
 
-#visualise_gameplay(trace.states)
 
 function sized_adjacency_visualisation(state_traces)
     for (j, state) in enumerate(state_traces)
@@ -92,7 +111,6 @@ function sized_adjacency_visualisation(state_traces)
     end
 end
 
-#sized_adjacency_visualisation(trace.states)
 
 
 
