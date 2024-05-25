@@ -5,8 +5,8 @@
 Network = NetLib.ResNet
 
 netparams = NetLib.ResNetHP(
-  num_filters=128,
-  num_blocks=5,
+  num_filters=64,
+  num_blocks=3,
   conv_kernel_size=(3, 3),
   num_policy_head_filters=32,
   num_value_head_filters=32,
@@ -14,7 +14,7 @@ netparams = NetLib.ResNetHP(
 
 self_play = SelfPlayParams(
   sim=SimParams(
-    num_games=5000,
+    num_games=1000,
     num_workers=128,
     batch_size=64,
     use_gpu=true,
@@ -22,7 +22,7 @@ self_play = SelfPlayParams(
     flip_probability=0.,
     alternate_colors=false),
   mcts=MctsParams(
-    num_iters_per_turn=600,
+    num_iters_per_turn=50,
     cpuct=2.0,
     prior_temperature=1.0,
     temperature=PLSchedule([0, 20, 30], [1.0, 1.0, 0.3]),
@@ -31,18 +31,18 @@ self_play = SelfPlayParams(
 
 arena = ArenaParams(
   sim=SimParams(
-    num_games=128,
-    num_workers=128,
-    batch_size=128,
+    num_games=50,
+    num_workers=50,
+    batch_size=50,
     use_gpu=true,
     reset_every=2,
-    flip_probability=0.5,
-    alternate_colors=true),
+    flip_probability=0.,
+    alternate_colors=false),
   mcts=MctsParams(
     self_play.mcts,
     temperature=ConstSchedule(0.2),
-    dirichlet_noise_ϵ=0.05),
-  update_threshold=0.05)
+    dirichlet_noise_ϵ=0.1),
+  update_threshold=50000)
 
 learning = LearningParams(
   use_gpu=true,
@@ -54,7 +54,7 @@ learning = LearningParams(
   l2_regularization=1e-4,
   nonvalidity_penalty=1.,
   min_checkpoints_per_epoch=1,
-  max_batches_per_checkpoint=2000,
+  max_batches_per_checkpoint=1024,
   num_checkpoints=1)
 
 params = Params(
@@ -73,39 +73,21 @@ params = Params(
 ##### Evaluation benchmark
 #####
 
-mcts_baseline =
-  Benchmark.MctsRollouts(
-    MctsParams(
-      arena.mcts,
-      num_iters_per_turn=1000,
-      cpuct=1.))
-
-minmax_baseline = Benchmark.MinMaxTS(
-  depth=5,
-  τ=0.2,
-  amplify_rewards=true)
 
 alphazero_player = Benchmark.Full(arena.mcts)
-
 network_player = Benchmark.NetworkOnly(τ=0.5)
-
+  
 benchmark_sim = SimParams(
-  arena.sim;
-  num_games=256,
-  num_workers=256,
-  batch_size=256,
-  alternate_colors=false)
-
+    arena.sim;
+    num_games=50,
+    num_workers=1,
+    batch_size=1,
+    alternate_colors=false)
+  
 benchmark = [
-  Benchmark.Duel(alphazero_player, mcts_baseline,   benchmark_sim),
-# Benchmark.Duel(alphazero_player, minmax_baseline, benchmark_sim),
-  Benchmark.Duel(network_player,   mcts_baseline,   benchmark_sim),
-# Benchmark.Duel(network_player,   minmax_baseline, benchmark_sim)
-]
-
-#####
-##### Wrapping up in an experiment
-#####
-
-experiment = Experiment("connect-four",
-  GameSpec(), params, Network, netparams, benchmark)
+    Benchmark.Single(
+    Benchmark.Full(self_play.mcts),
+    benchmark_sim),
+    Benchmark.Single(
+    Benchmark.NetworkOnly(),
+    benchmark_sim)]

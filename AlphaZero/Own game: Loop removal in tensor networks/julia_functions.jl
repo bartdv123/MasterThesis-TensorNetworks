@@ -408,6 +408,7 @@ function generate_all_possible_looptotree_replacements(n)
     return spanning_tree_graphs
 end
 
+
 # Smaller helper functions
 function contraction_step(tn, bond_index)
 
@@ -421,11 +422,17 @@ function contraction_step(tn, bond_index)
     end
 
     tensor1, tensor2 = Tenet.select(tn, bond_index)
-
+    pop!(tn, tensor1)
+    pop!(tn, tensor2)                                                           
     contracted = Tenet.contract(tensor1, tensor2)
     # Replacing the relevant things inside of the TN    
-    pop!(tn, tensor1)
-    pop!(tn, tensor2)
+    
+    tensor1 = 0
+    tensor2 = 0 
+    current_mem_usage = ((Sys.total_memory() / 2^20) - (Sys.free_memory() / 2^20))
+    if current_mem_usage > 12000
+        GC.gc()                                                                 # Can the garbage collector help out in this memory intensive steps?
+    end
     push!(tn, contracted)
     
     
@@ -768,7 +775,7 @@ function extract_edge_representation_and_physical_indices(graph, cycle)
 end
 
 
-function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edge)
+function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edge, chi_max)
 
     """
     Initial cost function which takes in a graph, list of edges with their 
@@ -778,27 +785,84 @@ function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edg
 
     loop_active, dang_active = extract_edge_representation_and_physical_indices(graph, selected_cycle)
 
-    # Get a list of all participating bond dimensions in the MPS
-    # Extract the maximal occuring bond dimensions
-    # Cost model it as Χ^5
 
     chi_in_choosen_MPS = []
+    size_of_fold = 1
+
+    # extract the size of the selected edge
+    for edge in vcat(loop_active, dang_active)
+        if edge == selected_edge
+            for (v1,v2,w3) in weighted_edges
+                if Tuple(sort([v1,v2])) == edge
+                    size_of_fold = w3
+                    break
+                end
+            end
+        
+        end
+    end
+
     for edge in vcat(loop_active, dang_active)
         if edge == selected_edge
             continue
         else
             for (v1,v2,w3) in weighted_edges
                 if Tuple(sort([v1,v2])) == edge
-                    push!(chi_in_choosen_MPS, w3)
+                    push!(chi_in_choosen_MPS, size_of_fold*w3)
                     break
                 end
             end
         end
     end
+    
+    # COST =  (L) * chi ^2 * minimum (chi, chi_max)
+    #cost = maximum(chi_in_choosen_MPS)^2*minimum([maximum(chi_in_choosen_MPS), chi_max])
+    cost = length(chi_in_choosen_MPS)*maximum(chi_in_choosen_MPS)^2*minimum([maximum(chi_in_choosen_MPS), chi_max])
 
-    return length(loop_active)*maximum(chi_in_choosen_MPS)^2
+    return cost
 end
 
+
+function generate_toy_model_graph_n20()
+    
+    # Generate a toy model to discuss in the results.
+    g = SimpleGraph(20)
+    add_edge!(g, (1,2))
+    add_edge!(g, (1,4))
+    add_edge!(g, (1,7))
+    add_edge!(g, (4,9))
+    add_edge!(g, (7,9))
+    add_edge!(g, (2,3))
+    add_edge!(g, (3,5))
+    add_edge!(g, (3, 8))
+    add_edge!(g, (7,8))
+    add_edge!(g, (5,8))
+    add_edge!(g, (5,10))
+    add_edge!(g, (10,12))
+    add_edge!(g, (10, 11))
+    add_edge!(g, (9, 11))
+    add_edge!(g, (4,6))
+    add_edge!(g, (6,13))
+    add_edge!(g, (11,13))
+    add_edge!(g, (12,15))
+    add_edge!(g, (12,16))
+    add_edge!(g, (16,18))
+    add_edge!(g, (18,20))
+    add_edge!(g, (6,14))
+    add_edge!(g, (14,17))
+    add_edge!(g, (17,19))
+    add_edge!(g, (19,20))
+    add_edge!(g, (13,15))
+    add_edge!(g, (16,20))
+    add_edge!(g, (14,19))
+    add_edge!(g, (15,17))
+
+
+    #Planar representation
+    locs_x =     [-4, -4, -4, -3, -3, -2, -2, -2, -1, -1, 0, 0, 1, 1, 2, 2, 3, 3, 4 ,4]   
+    locs_y = -1*[2, 0, -3, 3, -4, 4, 1, -1, 2, -2, 0, -2, 2, 4, 0, -3, 2, -4, 3, 0]
+    return g
+end
 
 function display_selected_cycle(graph, cycle)
 
@@ -872,6 +936,47 @@ function display_selected_action(graph, cycle, choosen_edge)
     locs_y = -1*[-2, 1, -2, -1, 0, -2, 0, 3, 3, 1, 1, 0]
 
     display(gplot(graph, locs_x, locs_y, edgestrokec = colors_for_edges, nodelabel=nodes, nodefillc=colorant"springgreen3"))
+    
+end
+
+function display_selected_action_toyfinal(graph, cycle, choosen_edge)
+
+    """
+    This function takes in a graph from graphs.jl, 
+    a cycle inside from the cycle basis of the graph and a choosen edge
+    on this graph which is the where the cut is made.
+    By generating a graphplot with a color code the selected edge and underlying
+    MPS structure for appling DMRG is visualized.
+    """
+
+    nodes = [node for node in vertices(graph)]
+    loop_active, dang_active = extract_edge_representation_and_physical_indices(graph, cycle)
+    colors_for_edges = []
+    for edge in edges(graph)
+        s = src(edge)
+        d = dst(edge)
+        if Tuple((Int(s), Int(d))) == choosen_edge
+            push!(colors_for_edges, colorant"green2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in loop_active
+            push!(colors_for_edges, colorant"goldenrod2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in dang_active
+            push!(colors_for_edges, colorant"olive")
+            continue
+        end
+        
+        push!(colors_for_edges, colorant"grey")
+      
+    end
+
+    # Planar embedding for toymodel Graph example
+    locs_x = [0.8235890524005085, 1.0, 0.07580751318974355, -0.017032037929692323, -0.2944683465563266, 0.19505501947920223, -0.34666814155572356, -0.30642007335610566, 0.4977523253682399, -0.7358328318661933, -0.4535100245888959, -0.6351469771061515, -1.0, -0.8649522531330216, 0.7274677388545647, 0.8296686177085972, 0.4719036541802202, 0.698920176497434, 0.10082819193961834, 0.49215115665455755]
+    locs_y = [-0.10897958507558192, 0.46721962406333617, 0.6797683283018006, -0.3196512600723005, -1.0, 0.13569820340952843, 0.38946479275835033, -0.2152231239505723, -0.5186006246689268, 0.20782072859317902, -0.55361343309079, -0.8258232353023699, 0.08322844321138567, -0.30754574543717594, 0.29675288939110867, 0.9916952245291406, 1.0, 0.6732513753667592, -0.8050366612343887, -0.13189261036750358]
+
+    display(gplot(graph, locs_x, locs_y, edgestrokec = colors_for_edges, nodelabel=nodes, nodefillc=colorant"orange"))
     
 end
 
@@ -1144,7 +1249,7 @@ function edge_weights_update_DMRG_exact(old_graph, selected_cycle, selected_edge
 end
 
 
-function edge_weights_update_DRMG_chi_max(old_graph, selected_cycle, selected_edge, weighted_edge_list, chi_max)
+function edge_weights_update_DMRG_chimax(old_graph, selected_cycle, selected_edge, weighted_edge_list, chi_max)
 
     """
     Approximate DMRG dimensionality updating, this allows one to specify a 
@@ -2013,3 +2118,201 @@ function generate_random_quantum_circuit_2d_2xn(num_q_x, num_q_y, layers, theta)
     return TN
 
 end
+
+
+function replace_index(tensor, replace_inds, new_inds)
+    
+    mapping = Dict(zip(replace_inds, new_inds))
+    #display(mapping)
+    current_inds = inds(tensor)
+    ids = []
+    for id in current_inds
+        if id in replace_inds
+            push!(ids, mapping[id])
+        else
+            push!(ids, id)
+        end
+    end
+    new_tensor = Tenet.Tensor(tensor.data, [ids...])
+    return new_tensor
+end
+
+
+function random_unitary_tensor_and_random_unitary_inverse(size1, size2, inserted_indices, new_inds, virtual_symbol)
+    groupsize = size1*size2
+    Q = Matrix{ComplexF64}(I, groupsize, groupsize)
+    group_inds = [id for id in [inserted_indices..., virtual_symbol]]
+    grouping = Tenet.Tensor(reshape(Q, (size1,size2,groupsize)), group_inds)
+    splitting = Tenet.Tensor(reshape(inv(Q), (groupsize,size1, size2)), [virtual_symbol, new_inds...])
+    id = Tenet.contract(grouping, splitting)
+    #println("Reshaped data is a correct Q^dag*Q = I ? ==> ", isapprox(reshape(id.data, (groupsize,groupsize)), I))
+    return grouping, splitting
+end
+
+
+function Tenet_loop_2_Tenet_MPS(loop, index_cycle, index_to_cut, printing = false)
+    global new_tn_tensors = []
+    global contract_list = []
+    global loop_size
+    global propagating_iso_index
+    global propagating_iso_split 
+    global loop_index_propagation
+
+    idx = findfirst(isequal(index_to_cut), index_cycle)
+    mps_cycle = vcat(index_cycle[idx+1:end], index_cycle[1:idx-1])
+    ordered_along_loop = collect_tensors_along_loop(loop, deepcopy(mps_cycle), index_to_cut)
+
+    contract_first = []                                                         # implement the memory vibrations!!!! scale it up to large networks
+    """
+    Walk along the loop and make the necessary alterations at each step
+    """
+    new_virtual_inds = [Symbol("v$i") for i in 1:100]
+    collect_virtual = []
+    
+    for (i, tensor) in enumerate(ordered_along_loop)
+        if printing == true
+            println("________________________Working on step = $i"*"_______________________________________")
+            println(" Tensor $i  => ", inds(tensor), "with sizes", [size(tensor, id) for id in inds(tensor)])
+        end
+
+        # cases on the edges of the loop are treated seperately
+        if i == 1
+            global loop_size = [size(tensor, id) for id in inds(tensor) if id == Symbol(index_to_cut)][1]
+            global loop_index_propagation = Symbol(index_to_cut)
+            current_inds = inds(tensor)
+            dangling_leg = setdiff(inds(tensor), [Symbol(id) for id in index_cycle])
+            next_group_leg = setdiff(inds(tensor), [loop_index_propagation, dangling_leg[1]])[1]
+            grouplegs = [loop_index_propagation, next_group_leg]            
+            grouplegs_new = Symbol.(string.(grouplegs) .*repeat("_", i))
+            new_t = replace_index(tensor, grouplegs, grouplegs_new)
+            tensor_id = setdiff(inds(tensor), [Symbol(index_to_cut), dangling_leg[1]])[1]
+            global propagating_iso_index = tensor_id
+            tensor_size = size(tensor, tensor_id)
+            grouping, splitting = random_unitary_tensor_and_random_unitary_inverse(loop_size, tensor_size, grouplegs_new, grouplegs, new_virtual_inds[i])
+            push!(collect_virtual, new_virtual_inds[i])
+            global propagating_iso_split = splitting
+
+            if printing == true
+                println("new_t = ", inds(new_t), "with sizes", [size(new_t, id) for id in inds(new_t)])
+                println("grouping = ", inds(grouping), "with sizes", [size(grouping, id) for id in inds(grouping)])
+            end
+
+            push!(new_tn_tensors, new_t)
+            push!(new_tn_tensors, grouping)
+    
+            continue
+        end
+    
+    
+        # general bulk case
+        if 1 < i < length(ordered_along_loop)
+            
+            current_inds = inds(tensor)
+            dangling_leg = setdiff(inds(tensor), [Symbol(id) for id in index_cycle])
+            next_group_leg = setdiff(inds(tensor), [propagating_iso_index, dangling_leg[1]])[1]
+            tensor_size = size(tensor, next_group_leg)
+            
+            grouplegs = [loop_index_propagation, next_group_leg]
+            grouplegs_new = Symbol.(string.(grouplegs) .*repeat("_", i))
+            push!(contract_first, grouplegs_new[2])
+            new_t = replace_index(tensor, grouplegs, grouplegs_new)
+            new_split = replace_index(propagating_iso_split, grouplegs, grouplegs_new)
+    
+            grouping, splitting = random_unitary_tensor_and_random_unitary_inverse(loop_size, tensor_size, grouplegs_new, grouplegs, new_virtual_inds[i])
+
+            if printing == true
+                println("new_split =", inds(new_split), "with sizes", [size(new_split, id) for id in inds(new_split)] )
+                println("new_t = ", inds(new_t), "with sizes", [size(new_t, id) for id in inds(new_t)])
+                println("grouping = ", inds(grouping), "with sizes", [size(grouping, id) for id in inds(grouping)])            
+            end
+
+            push!(new_tn_tensors, new_split)
+            push!(new_tn_tensors, new_t)
+            push!(new_tn_tensors, grouping)
+            global propagating_iso_split = splitting
+            global propagating_iso_index = next_group_leg
+            push!(collect_virtual, new_virtual_inds[i])
+    
+            continue
+        end
+    
+        if i == length(ordered_along_loop)
+            push!(new_tn_tensors, propagating_iso_split)
+            push!(new_tn_tensors, tensor)
+        end
+    
+    end
+
+    
+    
+    mps_network = Tenet.TensorNetwork(new_tn_tensors)
+    contraction_list = inds(mps_network, :inner)
+       
+    contract_list = vcat(contract_first, setdiff(contraction_list, collect_virtual))
+    ##UNFORTUNATELY NO POSSIBILITY TO ADD THIS IN  AN OPTIMIZED MANNER............
+    for id in contract_list
+        if id ∈ inds(mps_network)
+            contraction_step(mps_network, id)
+        end
+    end
+    println("after mps contraction current_mem_usage = ", current_mem_usage)
+
+   
+    return mps_network, collect_virtual
+end
+
+
+function modify_approx_sizes_schimdt_compatible(approximate_sizes) 
+    new_approximate_sizes_list = []
+    new_approximate_sizes_list2 = []
+
+    global sizepropagator = 0
+
+    for size in approximate_sizes
+        
+        R, ph, L = size
+        if sizepropagator != 0
+            R = sizepropagator
+        end
+
+        if L > R*ph
+            push!(new_approximate_sizes_list, (R, ph, R*ph))
+            global sizepropagator = R*ph
+        else
+            push!(new_approximate_sizes_list, (R, ph, L))
+            global sizepropagator = 0
+        end
+    end
+
+    global sizepropagator = 0
+
+    for size in reverse(new_approximate_sizes_list)
+        R, ph, L = size
+
+        if sizepropagator != 0
+            L = sizepropagator
+        end
+
+        if R > L*ph
+            push!(new_approximate_sizes_list2, (L*ph, ph, L))
+            global sizepropagator = L*ph
+        else
+            push!(new_approximate_sizes_list2, (R, ph, L))
+            global sizepropagator = 0
+        end
+    end
+
+
+    return reverse(new_approximate_sizes_list2)
+end
+
+
+
+
+
+
+
+
+
+
+    

@@ -42,7 +42,7 @@ end
 
 
 GI.spec(::GameEnv) = GameSpec()
-
+global chi_max = 12
 
 function GI.init(::GameSpec)
 
@@ -269,21 +269,12 @@ function GI.play!(env::GameEnv, action)
     """
     Rewards while_playing
     """
-
-    #TODO: IMPLEMENTATION OF DIFFERENT REWARD FUNCTIONS?
-    # Reward function right now is a chi_max^5 for all chi inside of the MPS
-    # structure which is uncovered after cutting an edge.
-    # display_selected_action(old_graph, choosen_cycle, choosen_edge)
-    # minimize the loss -> -1*
-    push!(env.reward_list, -1*calculate_DMRG_cost(old_graph, env.weighted_edge_list, choosen_cycle, choosen_edge))
-
-    env.weighted_edge_list = edge_weights_update_DMRG_exact(old_graph, choosen_cycle, choosen_edge, env.weighted_edge_list)
+    #TODO: implementation of the calculate_DMRG_cost as is discussed in the text.
+    push!(env.reward_list, -1*calculate_DMRG_cost(old_graph, env.weighted_edge_list, choosen_cycle, choosen_edge, chi_max))
+    env.weighted_edge_list = edge_weights_update_DMRG_chimax(old_graph, choosen_cycle, choosen_edge, env.weighted_edge_list, chi_max)
     env.sized_adjacency = sized_adj_from_weightededges(env.weighted_edge_list, old_graph)
     # Update the other game variables such as edge availability based on cycle finding
     update_status!(env, action)                                                 # Updates the status of the amask, and game game_terminated status
-    # --> Generates new possible cycle_basis -> cutting an edge can create new 
-    # possible faces. 
-
    
 end
 
@@ -326,9 +317,6 @@ function GI.white_reward(env::GameEnv)
     obtained_rewards = sum(env.reward_list)
     return obtained_rewards
 end
-
-
-
 
 
 function GI.render(env::GameEnv, visualisation = true)

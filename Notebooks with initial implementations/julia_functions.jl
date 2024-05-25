@@ -563,7 +563,7 @@ function fill_with_random(G, dims, visualisation = false, fixed_dim = true)
         if fixed_dim == false
             size_generation_tuple = Tuple([rand(dims[1]:dims[2]) for i in 1:length(inds)])
         end
-        push!(tensors, Tensor(rand(size_generation_tuple...), inds))
+        push!(tensors, Tensor(rand(ComplexF64, size_generation_tuple...), inds))
         
     end
 
@@ -571,6 +571,7 @@ function fill_with_random(G, dims, visualisation = false, fixed_dim = true)
     return TN
 
 end
+
 
 function extract_graph_representation(TN, printing=false)
 

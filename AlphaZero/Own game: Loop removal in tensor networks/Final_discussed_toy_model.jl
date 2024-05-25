@@ -2,10 +2,8 @@ using AlphaZero                                                                 
 import AlphaZero.GI                                                             # Game interface
 using Graphs                                                                    # Nice and efficienct way of representing the connectivity in the tensor_network
 using GraphPlot                                                                 # Graph visualisation package
-using Tenet                                                                     # TensorNetwork Package
+using Colors
 using FileIO
-using JLD2
-
 include("julia_functions.jl")                                                   # Paste a copy of julia_functions.jl inside of the directory
 
 """
@@ -17,7 +15,7 @@ used for the logic of edge selection and cost function calculations
 Setting up a game environment and game structure -> try to do initial play and
 testing on the Frucht Graph
 """
-global chi_approx = 16
+
 
 struct GameSpec <: GI.AbstractGameSpec end                                      # Create a AbstractGameSpec structure
 
@@ -43,15 +41,11 @@ mutable struct GameEnv <: GI.AbstractGameEnv                                    
 end
 
 
+#Planar representation
+global locs_x =     [-4, -4, -4, -3, -3, -2, -2, -2, -1, -1, 0, 0, 1, 1, 2, 2, 3, 3, 4 ,4]   
+global locs_y = -1*[2, 0, -3, 3, -4, 4, 1, -1, 2, -2, 0, -2, 2, 4, 0, -3, 2, -4, 3, 0]
 GI.spec(::GameEnv) = GameSpec()
-
-# global variables
-global edge_count
-global amount_loops
-global TN, graph, tv_map, ie_map, weighted_edge_list, ei_map = FileIO.load("transport variables/seperation_variables.jld2","A2")
-global locs_x
-global locs_y
-
+global chi_max = 10
 
 function GI.init(::GameSpec)
 
@@ -61,22 +55,16 @@ function GI.init(::GameSpec)
     Return an initialized GameEnv
     """
 
-    nodes = [node for node in vertices(graph)]
-    layout = spectral_layout(graph)
-    global locs_x = layout[1]
-    global locs_y = layout[2]
-    #println(locs_x, locs_y)
-    #display the final tree that the network found
-    #display(gplot(graph, nodelabel=nodes, nodefillc=colorant"springgreen3", layout=spectral_layout))
-
+    graph, tv_map, ie_map, weighted_edge_list, ei_map = FileIO.load("transport variables/toymodel.jld2","A2")
     sized_adjacency = sized_adj_from_weightededges(weighted_edge_list, graph)
     initial_adjacency = adjacency_matrix(graph)
     cycle_basis = minimum_cycle_basis(graph)
-    global amount_loops = length(cycle_basis)
     list_of_edges = cycle_basis_to_edges(cycle_basis)
-    global edge_count = length(list_of_edges)
     boolean_action = vec(transpose(create_actionmatrix(graph, list_of_edges)))
     history = []
+    global amount_loops = length(cycle_basis)
+    global edge_count = length(list_of_edges)
+
     amask = vec(transpose(create_actionmatrix(graph, list_of_edges)))
 
     return GameEnv(
@@ -91,6 +79,7 @@ function GI.init(::GameSpec)
         false,
         history    
         )
+
 end
 
 
@@ -158,7 +147,7 @@ function GI.available_actions(env::GameEnv)
 
     # Returns a indices where the boolean action mask == 1
     indices = findall(x -> x == 1, env.amask)
-    # println("availability : ", indices)
+    #println("availability : ", indices)
     return indices 
 end
 
@@ -202,8 +191,6 @@ function update_action_mask!(env::GameEnv, action)                              
 
     # Generate the current graph structure based on the adjacency matrix
     current_graph_representation = Graphs.SimpleGraphs.SimpleGraph(env.current_adjacency)
-    nodes = [node for node in vertices(current_graph_representation)]
-           
     env.cycle_basis = minimum_cycle_basis(current_graph_representation)
     #display(create_actionmatrix(current_graph_representation, env.list_of_edges))
     env.boolean_action = vec(transpose(create_actionmatrix(current_graph_representation, env.list_of_edges)))
@@ -223,8 +210,7 @@ function update_action_mask!(env::GameEnv, action)                              
         if show_plot == true
             #display the final tree that the network found
             nodes = [node for node in vertices(current_graph_representation)]
-           
-            display(gplot(current_graph_representation, nodelabel=nodes, nodefillc=colorant"springgreen3")) 
+            display(gplot(current_graph_representation, locs_x, locs_y, nodelabel=nodes, nodefillc=colorant"springgreen3")) 
         end
         
         if show_history == true
@@ -253,12 +239,13 @@ end
 
 
 function GI.play!(env::GameEnv, action)
+    
     if mod(action, edge_count) == 0
         action = [action ÷ edge_count, edge_count]
     else
         action = [(action ÷ edge_count)+1, action - (action ÷ edge_count)*edge_count]
     end
-    
+
     """
     What should happen in the game state when the agent takes an action
     -> Should happen inplace?
@@ -281,21 +268,12 @@ function GI.play!(env::GameEnv, action)
     """
     Rewards while_playing
     """
-
-    #TODO: IMPLEMENTATION OF DIFFERENT REWARD FUNCTIONS?
-    # Reward function right now is a chi_max^3 for all chi inside of the MPS
-    # structure which is uncovered after cutting an edge.
-    # display_selected_action(old_graph, choosen_cycle, choosen_edge)
-    # minimize the loss -> -1*
-    push!(env.reward_list, -1*calculate_DMRG_cost(old_graph, env.weighted_edge_list, choosen_cycle, choosen_edge))
-
-    env.weighted_edge_list = edge_weights_update_DRMG_chi_max(old_graph, choosen_cycle, choosen_edge, env.weighted_edge_list, chi_approx)
+    #TODO: implementation of the calculate_DMRG_cost as is discussed in the text.
+    push!(env.reward_list, -1*calculate_DMRG_cost(old_graph, env.weighted_edge_list, choosen_cycle, choosen_edge, chi_max))
+    env.weighted_edge_list = edge_weights_update_DMRG_chimax(old_graph, choosen_cycle, choosen_edge, env.weighted_edge_list, chi_max)
     env.sized_adjacency = sized_adj_from_weightededges(env.weighted_edge_list, old_graph)
     # Update the other game variables such as edge availability based on cycle finding
     update_status!(env, action)                                                 # Updates the status of the amask, and game game_terminated status
-    # --> Generates new possible cycle_basis -> cutting an edge can create new 
-    # possible faces. 
-
    
 end
 
@@ -318,10 +296,6 @@ history = deepcopy(env.history)
 
 
 GI.white_playing(env::GameEnv) = true
-
-
-
-
 GI.heuristic_value(env::GameEnv) = Float64(sum(env.reward_list))
 
 
@@ -343,11 +317,14 @@ end
 
 
 
-function GI.render(env::GameEnv, visualisation = true, locs_x = locs_x, locs_y = locs_y)
+function GI.render(env::GameEnv, visualisation = true)
 
 `   """
     What should happen when rendering a game environment
     """`
+
+    print("\n weighted_edge_list: \n")
+    println(env.weighted_edge_list)
 
     if visualisation == true
         ### ACTION LIST OF CYCLES AND EDGE --> GAME PLAY Visualisation possibility
@@ -355,11 +332,11 @@ function GI.render(env::GameEnv, visualisation = true, locs_x = locs_x, locs_y =
         current_graph_representation = Graphs.SimpleGraphs.SimpleGraph(env.current_adjacency)
         nodes = [node for node in vertices(current_graph_representation)]
         #display the final tree that the network found
-        
         display(gplot(current_graph_representation, locs_x, locs_y, nodelabel=nodes, nodefillc=colorant"springgreen3"))
     end
 
-    
+    print("\n ACTION MASK: \n")
+    println(env.amask)
     print("\n REWARD LIST and CUMMULATIVE REWARDS: \n")
     println(env.reward_list, sum(env.reward_list))
 

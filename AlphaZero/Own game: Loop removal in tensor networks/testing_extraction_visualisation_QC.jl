@@ -6,38 +6,34 @@ using FileIO
 using JLD2
 
 include("julia_functions.jl")                                                   # Paste a copy of julia_functions.jl inside of the directory
-#include("game_v4_graph in env.jl")
-#include("game_v4_graph not in env copy.jl")
 include("game_v10_10x10_QC.jl")
 include("params1.jl")
 
 
 # Then, pass it to the experiment initialization:
-experiment = AlphaZero.Experiment("QC", GameSpec(), params, Network, netparams, benchmark)
+experiment = AlphaZero.Experiment("QC_2x6_d5", GameSpec(), params, Network, netparams, benchmark)
 #AlphaZero.Scripts.test_game(experiment, n=1)
 println("Test passed!!! Starting AlphaZero environment")
 #AlphaZero.Scripts.explore(experiment)
-#rScripts.dummy_run(experiment)
+#Scripts.dummy_run(experiment)
 #AlphaZero.Scripts.train(experiment)
-
 
 #  AlphaZero Player
 Ses = Session(experiment)
-# p = AlphaZeroPlayer(Ses.env)
-# gspec = Ses.env.gspec
+p = AlphaZeroPlayer(Ses.env)
+gspec = Ses.env.gspec
 
-# trace = play_game(gspec, p; flip_probability=0.)
+trace = play_game(gspec, p; flip_probability=0.)
 
-# print("\n\n\n_____   The agent has reached the final position  ___________\n")
-# taken_path = last(trace.states).history
-# taken_path = [action for action in taken_path]
-# println("Respective loop lengths = ", [length(taken[1]) for taken in taken_path])
+print("\n\n\n_____   The agent has reached the final position  ___________\n")
+taken_path = last(trace.states).history
+taken_path = [action for action in taken_path]
+println("Respective loop lengths = ", [length(taken[1]) for taken in taken_path])
 
-# FileIO.save("transport variables/taken_path.jld2","taken_path", taken_path)
 
-# rewards_list = last(trace.states).reward_list
-# reward =  sum(rewards_list)
-# println("The obtained rewards throughout the AlphaZero path = ", rewards_list, reward)
+rewards_list = last(trace.states).reward_list
+reward =  sum(rewards_list)
+println("The obtained rewards throughout the AlphaZero path = ", rewards_list, reward)
 
 
 # RandomPlayer
@@ -56,20 +52,19 @@ rewards_list = last(trace.states).reward_list
 reward =  sum(rewards_list)
 println("The obtained rewards throughout the random path = ", rewards_list, reward)
 
-### Trying to extract_graph_representation of the initial state for visualisation purpose
+## Trying to extract_graph_representation of the initial state for visualisation purpose
 adj_m = first(trace.states).current_adjacency
 println("the length of the trace = ", length(trace.states))
-# the graph representation can be extracted from the trace.states!!!
 
-FileIO.save("transport variables/taken_path.jld2","taken_path", taken_path)
+# FileIO.save("transport variables/taken_path.jld2","taken_path", taken_path)
 
 function visualise_gameplay(state_traces)
 
-    """
-    Function which makes a visualisation of the agent's taken path, this is done
-    based on the graph visualisation extracted from the traces and from the
-    history of the action list
-    """
+    
+    #Function which makes a visualisation of the agent's taken path, this is done
+    #based on the graph visualisation extracted from the traces and from the
+    #history of the action list
+    
 
 
     old_graph = Graphs.SimpleGraphs.SimpleGraph(first(state_traces).current_adjacency)
@@ -110,7 +105,6 @@ function sized_adjacency_visualisation(state_traces)
         display(state.weighted_edge_list)
     end
 end
-
 
 
 
