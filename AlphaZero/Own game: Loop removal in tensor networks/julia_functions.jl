@@ -427,14 +427,9 @@ function contraction_step(tn, bond_index)
     contracted = Tenet.contract(tensor1, tensor2)
     # Replacing the relevant things inside of the TN    
     
-    tensor1 = 0
-    tensor2 = 0 
-    current_mem_usage = ((Sys.total_memory() / 2^20) - (Sys.free_memory() / 2^20))
-    if current_mem_usage > 12000
-        GC.gc()                                                                 # Can the garbage collector help out in this memory intensive steps?
-    end
-    push!(tn, contracted)
     
+    push!(tn, contracted)
+    contracted = 0
     
 
 end
@@ -571,11 +566,11 @@ function fill_with_random(G, dims, visualisation = false, fixed_dim = true)
         if fixed_dim == false
             size_generation_tuple = Tuple([rand(dims[1]:dims[2]) for i in 1:length(inds)])
         end
-        push!(tensors, Tensor(rand(size_generation_tuple...), inds))
+        push!(tensors, Tenet.Tensor(rand(size_generation_tuple...), inds))
         
     end
 
-    TN = TensorNetwork(tensors)
+    TN = Tenet.TensorNetwork(tensors)
     return TN
 
 end
@@ -1605,6 +1600,7 @@ end
 
 function generate_random_quantum_circuit(num_q, layers, theta)
     #symbols from 1 - 1000
+    theta = rand(0,4*pi)
     unique_symbols = [Symbol(i) for i in 1:1000]
     # prep_z state for the initial_state: all qubits in |0>
     initial_state = [1, 0]
@@ -1669,7 +1665,6 @@ function generate_random_quantum_circuit(num_q, layers, theta)
         if rank == 2
             # prememtively contract one of the connecting indices
             if inds(tensor)[1] ∈ inds(TN)
-                println("inside")
                 contraction_step(TN, [inds(tensor)[1]])
             end
             # trivertex netwrok structure
@@ -1681,6 +1676,7 @@ function generate_random_quantum_circuit(num_q, layers, theta)
 end
 
 function generate_random_quantum_circuit_2d_2x2(num_q_x, num_q_y, layers, theta)
+    theta = rand(0,4*pi)
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
@@ -1768,6 +1764,7 @@ function generate_random_quantum_circuit_2d_2x2(num_q_x, num_q_y, layers, theta)
 end
 
 function generate_random_quantum_circuit_2d_4x4(num_q_x, num_q_y, layers, theta)
+    theta = rand(0,4*pi)
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
@@ -1925,6 +1922,7 @@ function select_pairs_and_collect_unused(matrix)
 end
 
 function generate_random_quantum_circuit_2d_random_connections(num_q_x, num_q_y, layers, theta)
+    theta = rand(0,4*pi)
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
@@ -2002,6 +2000,7 @@ end
 
 
 function generate_random_quantum_circuit_2d_2xn(num_q_x, num_q_y, layers, theta)
+    theta = rand(0,4*pi)
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
@@ -2101,7 +2100,7 @@ function generate_random_quantum_circuit_2d_2xn(num_q_x, num_q_y, layers, theta)
         
     end
     
-    TN = Tenet.TensorNetwork(tensors_in_network)
+    global TN = Tenet.TensorNetwork(tensors_in_network)
 
     for tensor in Tenet.tensors(TN)
         rank = length(inds(tensor))
@@ -2113,7 +2112,20 @@ function generate_random_quantum_circuit_2d_2xn(num_q_x, num_q_y, layers, theta)
         end
     
     end
-    
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+
+        if rank == 2
+            # prememtively contract one of the connecting indices
+            if inds(tensor)[1] ∈ inds(TN)
+                global TN = contraction_step(TN, [inds(tensor)[1]])
+            end
+            # trivertex netwrok structure
+        end
+    end
+
+  
 
     return TN
 
