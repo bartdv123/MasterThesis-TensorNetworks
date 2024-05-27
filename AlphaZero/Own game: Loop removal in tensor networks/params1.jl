@@ -70,10 +70,3 @@ learning = LearningParams(
         [      0,        3],
         [4_000, 8_000]))
   
-#####
-##### Evaluation benchmark
-#####
-
-
-
-experiment = AlphaZero.Experiment("Toymodel", GameSpec(), params, network, netparams, benchmark)

@@ -9,6 +9,7 @@ using TensorOperations
 using LinearAlgebra
 using Graphs
 using Colors
+using Random
 using GraphPlot
 using EinExprs
 using Combinatorics
@@ -407,6 +408,7 @@ function generate_all_possible_looptotree_replacements(n)
     return spanning_tree_graphs
 end
 
+
 # Smaller helper functions
 function contraction_step(tn, bond_index)
 
@@ -420,13 +422,14 @@ function contraction_step(tn, bond_index)
     end
 
     tensor1, tensor2 = Tenet.select(tn, bond_index)
-
+    pop!(tn, tensor1)
+    pop!(tn, tensor2)                                                           
     contracted = Tenet.contract(tensor1, tensor2)
     # Replacing the relevant things inside of the TN    
-    pop!(tn, tensor1)
-    pop!(tn, tensor2)
+    
+    
     push!(tn, contracted)
-        
+    contracted = 0
     
 
 end
@@ -563,15 +566,14 @@ function fill_with_random(G, dims, visualisation = false, fixed_dim = true)
         if fixed_dim == false
             size_generation_tuple = Tuple([rand(dims[1]:dims[2]) for i in 1:length(inds)])
         end
-        push!(tensors, Tensor(rand(ComplexF64, size_generation_tuple...), inds))
+        push!(tensors, Tenet.Tensor(rand(size_generation_tuple...), inds))
         
     end
 
-    TN = TensorNetwork(tensors)
+    TN = Tenet.TensorNetwork(tensors)
     return TN
 
 end
-
 
 function extract_graph_representation(TN, printing=false)
 
@@ -618,8 +620,8 @@ function extract_graph_representation(TN, printing=false)
     edge_index_map = Dict{}()                                                   # dictionary which maps (source, drain) tuples to tensor network indices
 
     pairs = collect(combinations([node for node in vertices(g)], 2))
-
     for possible_connection in pairs
+        #check if tensor at possible v1
         v1 = possible_connection[1]
         v2 = possible_connection[2]
         T_v1 = tensor_vertex_map[v1]
@@ -634,6 +636,7 @@ function extract_graph_representation(TN, printing=false)
             edge_index_map[(v1,v2)] = index_intersection
         end
     end
+
     if printing == true
         display(gplot(g, nodelabel=[node for node in vertices(g)]))
         println(index_edge_map)
@@ -767,7 +770,7 @@ function extract_edge_representation_and_physical_indices(graph, cycle)
 end
 
 
-function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edge)
+function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edge, chi_max)
 
     """
     Initial cost function which takes in a graph, list of edges with their 
@@ -777,27 +780,84 @@ function calculate_DMRG_cost(graph, weighted_edges, selected_cycle, selected_edg
 
     loop_active, dang_active = extract_edge_representation_and_physical_indices(graph, selected_cycle)
 
-    # Get a list of all participating bond dimensions in the MPS
-    # Extract the maximal occuring bond dimensions
-    # Cost model it as Χ^5
 
     chi_in_choosen_MPS = []
+    size_of_fold = 1
+
+    # extract the size of the selected edge
+    for edge in vcat(loop_active, dang_active)
+        if edge == selected_edge
+            for (v1,v2,w3) in weighted_edges
+                if Tuple(sort([v1,v2])) == edge
+                    size_of_fold = w3
+                    break
+                end
+            end
+        
+        end
+    end
+
     for edge in vcat(loop_active, dang_active)
         if edge == selected_edge
             continue
         else
             for (v1,v2,w3) in weighted_edges
                 if Tuple(sort([v1,v2])) == edge
-                    push!(chi_in_choosen_MPS, w3)
+                    push!(chi_in_choosen_MPS, size_of_fold*w3)
                     break
                 end
             end
         end
     end
+    
+    # COST =  (L) * chi ^2 * minimum (chi, chi_max)
+    #cost = maximum(chi_in_choosen_MPS)^2*minimum([maximum(chi_in_choosen_MPS), chi_max])
+    cost = length(chi_in_choosen_MPS)*maximum(chi_in_choosen_MPS)^2*minimum([maximum(chi_in_choosen_MPS), chi_max])
 
-    return length(loop_active)*maximum(chi_in_choosen_MPS)^3
+    return cost
 end
 
+
+function generate_toy_model_graph_n20()
+    
+    # Generate a toy model to discuss in the results.
+    g = SimpleGraph(20)
+    add_edge!(g, (1,2))
+    add_edge!(g, (1,4))
+    add_edge!(g, (1,7))
+    add_edge!(g, (4,9))
+    add_edge!(g, (7,9))
+    add_edge!(g, (2,3))
+    add_edge!(g, (3,5))
+    add_edge!(g, (3, 8))
+    add_edge!(g, (7,8))
+    add_edge!(g, (5,8))
+    add_edge!(g, (5,10))
+    add_edge!(g, (10,12))
+    add_edge!(g, (10, 11))
+    add_edge!(g, (9, 11))
+    add_edge!(g, (4,6))
+    add_edge!(g, (6,13))
+    add_edge!(g, (11,13))
+    add_edge!(g, (12,15))
+    add_edge!(g, (12,16))
+    add_edge!(g, (16,18))
+    add_edge!(g, (18,20))
+    add_edge!(g, (6,14))
+    add_edge!(g, (14,17))
+    add_edge!(g, (17,19))
+    add_edge!(g, (19,20))
+    add_edge!(g, (13,15))
+    add_edge!(g, (16,20))
+    add_edge!(g, (14,19))
+    add_edge!(g, (15,17))
+
+
+    #Planar representation
+    locs_x =     [-4, -4, -4, -3, -3, -2, -2, -2, -1, -1, 0, 0, 1, 1, 2, 2, 3, 3, 4 ,4]   
+    locs_y = -1*[2, 0, -3, 3, -4, 4, 1, -1, 2, -2, 0, -2, 2, 4, 0, -3, 2, -4, 3, 0]
+    return g
+end
 
 function display_selected_cycle(graph, cycle)
 
@@ -874,6 +934,122 @@ function display_selected_action(graph, cycle, choosen_edge)
     
 end
 
+function display_selected_action_toyfinal(graph, cycle, choosen_edge)
+
+    """
+    This function takes in a graph from graphs.jl, 
+    a cycle inside from the cycle basis of the graph and a choosen edge
+    on this graph which is the where the cut is made.
+    By generating a graphplot with a color code the selected edge and underlying
+    MPS structure for appling DMRG is visualized.
+    """
+
+    nodes = [node for node in vertices(graph)]
+    loop_active, dang_active = extract_edge_representation_and_physical_indices(graph, cycle)
+    colors_for_edges = []
+    for edge in edges(graph)
+        s = src(edge)
+        d = dst(edge)
+        if Tuple((Int(s), Int(d))) == choosen_edge
+            push!(colors_for_edges, colorant"green2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in loop_active
+            push!(colors_for_edges, colorant"goldenrod2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in dang_active
+            push!(colors_for_edges, colorant"olive")
+            continue
+        end
+        
+        push!(colors_for_edges, colorant"grey")
+      
+    end
+
+    # Planar embedding for toymodel Graph example
+    locs_x = [0.8235890524005085, 1.0, 0.07580751318974355, -0.017032037929692323, -0.2944683465563266, 0.19505501947920223, -0.34666814155572356, -0.30642007335610566, 0.4977523253682399, -0.7358328318661933, -0.4535100245888959, -0.6351469771061515, -1.0, -0.8649522531330216, 0.7274677388545647, 0.8296686177085972, 0.4719036541802202, 0.698920176497434, 0.10082819193961834, 0.49215115665455755]
+    locs_y = [-0.10897958507558192, 0.46721962406333617, 0.6797683283018006, -0.3196512600723005, -1.0, 0.13569820340952843, 0.38946479275835033, -0.2152231239505723, -0.5186006246689268, 0.20782072859317902, -0.55361343309079, -0.8258232353023699, 0.08322844321138567, -0.30754574543717594, 0.29675288939110867, 0.9916952245291406, 1.0, 0.6732513753667592, -0.8050366612343887, -0.13189261036750358]
+
+    display(gplot(graph, locs_x, locs_y, edgestrokec = colors_for_edges, nodelabel=nodes, nodefillc=colorant"orange"))
+    
+end
+
+
+function display_selected_action_ising(graph, cycle, choosen_edge)
+
+    """
+    This function takes in a graph from graphs.jl, 
+    a cycle inside from the cycle basis of the graph and a choosen edge
+    on this graph which is the where the cut is made.
+    By generating a graphplot with a color code the selected edge and underlying
+    MPS structure for appling DMRG is visualized.
+    """
+
+    nodes = [node for node in vertices(graph)]
+    loop_active, dang_active = extract_edge_representation_and_physical_indices(graph, cycle)
+    colors_for_edges = []
+    for edge in edges(graph)
+        s = src(edge)
+        d = dst(edge)
+        if Tuple((Int(s), Int(d))) == choosen_edge
+            push!(colors_for_edges, colorant"green2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in loop_active
+            push!(colors_for_edges, colorant"seagreen2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in dang_active
+            push!(colors_for_edges, colorant"darkolivegreen")
+            continue
+        end
+        
+        push!(colors_for_edges, colorant"grey")
+      
+    end
+
+    display(gplot(graph, edgestrokec = colors_for_edges, nodelabel=nodes, nodefillc=colorant"springgreen3"))
+    
+end
+
+
+function display_selected_action_QC(graph, cycle, choosen_edge, locs_x, locs_y)
+
+    """
+    This function takes in a graph from graphs.jl, 
+    a cycle inside from the cycle basis of the graph and a choosen edge
+    on this graph which is the where the cut is made.
+    By generating a graphplot with a color code the selected edge and underlying
+    MPS structure for appling DMRG is visualized.
+    """
+
+    nodes = [node for node in vertices(graph)]
+    loop_active, dang_active = extract_edge_representation_and_physical_indices(graph, cycle)
+    colors_for_edges = []
+    for edge in edges(graph)
+        s = src(edge)
+        d = dst(edge)
+        if Tuple((Int(s), Int(d))) == choosen_edge
+            push!(colors_for_edges, colorant"green2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in loop_active
+            push!(colors_for_edges, colorant"seagreen2")
+            continue
+        end
+        if Tuple((Int(s), Int(d))) in dang_active
+            push!(colors_for_edges, colorant"darkolivegreen")
+            continue
+        end
+        
+        push!(colors_for_edges, colorant"grey")
+      
+    end
+
+    display(gplot(graph, locs_x, locs_y, edgestrokec = colors_for_edges, nodelabel=nodes, nodefillc=colorant"springgreen3"))
+    
+end
 
 function minimum_cycle_basis(graph)
 
@@ -938,6 +1114,7 @@ function create_actionmatrix(graph, all_edges)
             end
         end
     end
+
     return A
 end
 
@@ -972,11 +1149,11 @@ function edge_weights_update_DMRG_exact(old_graph, selected_cycle, selected_edge
     network it computes the updated edge weights and returns a new updated
     weighted_edge_list.
     """
+    
 
     # extract edges inside of the loop and the ones which are dangling from the loop
     loop_active, dang_active = extract_edge_representation_and_physical_indices(old_graph, selected_cycle)
     virtual_MPS_edges = filter!(x -> x != selected_edge, loop_active)           # filter out the choosen edge which is cut 
-
 
     # create a dictionary for easely accesing the dimensions of the edges inside of the network
     weights_dict = Dict((edge1, edge2) => weight for (edge1, edge2, weight) in weighted_edge_list)
@@ -1001,7 +1178,7 @@ function edge_weights_update_DMRG_exact(old_graph, selected_cycle, selected_edge
     # AND RIGHT PRODUCT CAN BE DEFINED
     loop_length = length(virtual_MPS_edges)
 
-
+    
     # walk the loop
     for i in 1:loop_length
         chosen_edge = [Tuple(sort([source, drain])) for (source, drain) in virtual_MPS_edges if source == current_position || drain == current_position][1]
@@ -1067,7 +1244,7 @@ function edge_weights_update_DMRG_exact(old_graph, selected_cycle, selected_edge
 end
 
 
-function edge_weights_update_DRMG_chi_max(old_graph, selected_cycle, selected_edge, weighted_edge_list, chi_max)
+function edge_weights_update_DMRG_chimax(old_graph, selected_cycle, selected_edge, weighted_edge_list, chi_max)
 
     """
     Approximate DMRG dimensionality updating, this allows one to specify a 
@@ -1189,6 +1366,7 @@ function zero_padding_to_size(action_vector, size)
     return action_vector
 end
 
+
 function generate_entangled_mps(L, D, physical_size)
 
     """
@@ -1212,19 +1390,6 @@ function generate_entangled_mps(L, D, physical_size)
     entanglement_spectrum = TensorMap(sqrt(diagm([1/D for i in 1:D])), ℝ^D, ℝ^D)
 
     for i in 1:Int(L)
-        if i == 1
-            dims = (D*physical_size, 1)
-            QL = TensorMap(randisometry(dims), ℝ^(1) ⊗ ℝ^(physical_size), ℝ^D)
-            push!(tensor_list, QL)
-            continue
-        end
-
-        if i == L
-            dims = (D*physical_size, 1)
-            QR = TensorMap(convert(Array{Float64, 2}, transpose(randisometry(dims))), ℝ^D ⊗ ℝ^physical_size, ℝ^1)
-            push!(tensor_list, QR)
-            break
-        end
         if i < Int(floor(L/2))
 
         #append a random left canonical tensor
@@ -1258,13 +1423,9 @@ function generate_entangled_mps(L, D, physical_size)
  
     end
     S_max_mps = log(D)
-    #println([domain(tmap) for tmap in tensor_list])
-    #println([codomain(tmap) for tmap in tensor_list])    
-    
-
     return FiniteMPS([tmap for tmap in tensor_list]), S_max_mps
-
 end
+
 
 
 function Trivertex_classical_ising_partition_function(Nx::Int, Ny::Int, beta, plotting=false)
@@ -1322,13 +1483,13 @@ function Trivertex_classical_ising_partition_function(Nx::Int, Ny::Int, beta, pl
     for source in vertices(G)
         inds = Tuple([edges_map[edge] for edge in edges(G) if source in([src(edge), dst(edge)])])
         if length(inds) == 2
-            push!(tensors, Tensor(A2, inds))
+            push!(tensors, Tenet.Tensor(A2, inds))
         end
         if length(inds) == 3
-            push!(tensors, Tensor(A3, inds))
+            push!(tensors, Tenet.Tensor(A3, inds))
         end
         if length(inds) == 4
-            push!(tensors, Tensor(A4, inds))
+            push!(tensors, Tenet.Tensor(A4, inds))
         end   
         
     end
@@ -1352,4 +1513,818 @@ function Trivertex_classical_ising_partition_function(Nx::Int, Ny::Int, beta, pl
     # Return this as a Tenet tensor network object
 end
 
+### CODE FOR QUANTUM COMPUTER
 
+# some two qubit gates
+
+function xx_interaction(theta)
+    """
+    theta continious parameter θ = [0, 4π]
+    """
+    c = cos(theta/2)
+    s = sin(theta/2)
+    gate = [c 0 0 -im*s ; 0 c -im*s 0; 0 -im*s c 0; -im*s 0 0 c]
+    return gate
+end
+
+function yy_interaction(theta)
+    """
+    theta continious parameter θ = [0, 4π]
+    """
+    c = cos(theta/2)
+    s = sin(theta/2)
+    gate = [c 0 0 im*s ; 0 c -im*s 0; 0 -im*s c 0; im*s 0 0 c]
+    return gate
+end
+
+function zz_interaction(theta)
+    """
+    theta continious parameter θ = [0, 4π]
+    """
+    p = exp(+im*theta/2)
+    m = exp(-im*theta/2)
+    gate = [m 0 0 0; 0 p 0 0; 0 0 p 0; 0 0 0 m]
+    return gate
+end
+
+
+function single_gate_ry(theta)
+    """
+    Create a rotation about the y axis: theta [0, 4π]
+    """
+
+    c = cos(theta/2)
+    s = sin(theta/2)
+
+    gate = [c -s; s c]
+
+    return gate
+
+end
+
+function rel_phase(theta)
+    """
+    Create a phase shift: theta [0, 2π]
+    """
+    gate = [1 0; 0 exp(im*theta)]
+    return gate
+end
+
+function hadamard()
+    gate = 1/sqrt(2)*[1 1; 1 -1]
+    return gate
+end
+
+function xnot()
+    gate = [0 1 ; 1 0]
+    return gate
+end
+
+function sq_gt(input_data, index_in, index_out)
+    """
+    single qubit gate tensor
+    input data is the gate which is applied, index_in and index_out are 2 dimensional index-symbols
+    """
+    single_gate_tensor = Tenet.Tensor(input_data, [index_in, index_out])
+    return single_gate_tensor
+end
+
+function tq_gt(input_data, index_in, index_out)
+    """
+    double qubit gate tensor
+    """
+    tensorized_data = reshape(input_data, 2, 2, 2, 2)
+    double_gate_tensor = Tenet.Tensor(tensorized_data, [index_in..., index_out...])
+    return double_gate_tensor
+end
+
+function generate_random_quantum_circuit(num_q, layers, theta)
+    #symbols from 1 - 1000
+    theta = rand(0,4*pi)
+    unique_symbols = [Symbol(i) for i in 1:1000]
+    # prep_z state for the initial_state: all qubits in |0>
+    initial_state = [1, 0]
+    tensors_in_network = []
+    for i in 1:num_q
+        push!(tensors_in_network, Tenet.Tensor(initial_state, [popfirst!(unique_symbols)]))
+    end
+    previous_layer_inds = [inds(tensor)[1] for tensor in tensors_in_network[end-num_q+1:end]]
+    
+    for j in 1:layers
+        # add a layer of two qubit tensors entangling all pairs
+        if j % 2 == 1
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            for pair in Iterators.partition(previous_layer_inds, 2)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [popfirst!(unique_symbols), popfirst!(unique_symbols)]))
+            end
+            previous_layer_inds = [id for tensor in tensors_in_network[end-Int(num_q/2)+1:end] for id in inds(tensor)[3:4]]
+            #println(previous_layer_inds)
+        end
+        if j % 2 == 0
+            theta = rand(0:4*pi)
+            datas1 = [single_gate_ry(theta), rel_phase(theta/2), hadamard(), xnot()]
+            datas2 = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            id1 = popfirst!(previous_layer_inds)
+            push!(tensors_in_network, sq_gt(rand(datas1), id1, popfirst!(unique_symbols)))
+            for pair in Iterators.partition(previous_layer_inds[1:Int(num_q-2)], 2)
+                push!(tensors_in_network, tq_gt(rand(datas2), pair, [popfirst!(unique_symbols), popfirst!(unique_symbols)]))
+            end
+            id10 = previous_layer_inds[end]
+            push!(tensors_in_network, sq_gt(rand(datas1), id10, popfirst!(unique_symbols)))
+            previous_layer_inds = [id for tensor in tensors_in_network[end-Int(num_q/2)+1:end-1] for id in inds(tensor)[3:4]]
+            #println("previous_layer_inds = ", previous_layer_inds)
+            pushfirst!(previous_layer_inds, inds(tensors_in_network[end-Int(num_q/2)])[2])
+            push!(previous_layer_inds, inds(tensors_in_network[end])[2])
+            #println(previous_layer_inds)
+        end
+    
+    end
+    # no collapse at the
+    # for i in 1:num_q
+    #     push!(tensors_in_network, Tenet.Tensor(initial_state, [popfirst!(previous_layer_inds)]))
+    # end
+
+
+    #extract indices from two qubit gate- tensors setup
+    #println(length(tensors_in_network))
+    TN = Tenet.TensorNetwork(tensors_in_network)
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank > 3 #remove the bulk tesnors and replace them with new QR  tensors
+            pop!(TN, tensor)
+            Q, R = LinearAlgebra.qr(tensor, left_inds=inds(tensor)[1:2])
+            push!(TN, Q)
+            push!(TN, R)
+        end
+    
+    end
+
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank == 2
+            # prememtively contract one of the connecting indices
+            if inds(tensor)[1] ∈ inds(TN)
+                contraction_step(TN, [inds(tensor)[1]])
+            end
+            # trivertex netwrok structure
+        end
+    end
+
+    return TN
+
+end
+
+function generate_random_quantum_circuit_2d_2x2(num_q_x, num_q_y, layers, theta)
+    theta = rand(0,4*pi)
+
+    """
+    Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
+    and y directions.
+    Apply nearest neighbour 2 qubit gates --> x direction and y direction in a 
+    staggered fashion.
+    """
+
+    #symbols from 1 - 1000
+    unique_symbols = [Symbol(i) for i in 1:1000]
+    # prep_z state for the initial_state: all qubits in |0>
+    initial_state = [1, 0]
+    tensors_in_network = []
+
+    previous_layer_inds = Matrix{Symbol}(undef, num_q_x, num_q_y)
+
+    # initial state
+    for i in 1:num_q_x
+        for j in 1:num_q_y
+            id = popfirst!(unique_symbols)
+            push!(tensors_in_network, Tenet.Tensor(initial_state, [id]))
+            previous_layer_inds[i,j] = id
+        end
+    end
+
+
+    for j in 1:layers
+        # println("working on layer $j")
+        # add x direction gates
+
+        if j % 2 == 1
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+            for j in 1:num_q_y
+                for i in 1:2:(num_q_x-1)
+                    
+                    pair = [previous_layer_inds[i, j], previous_layer_inds[i+1, j]]
+                    id1 = popfirst!(unique_symbols)
+                    id2 = popfirst!(unique_symbols)
+                    push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                    tensor_index_matrix_new[i, j] = id1
+                    tensor_index_matrix_new[i+1, j] = id2
+                end
+            end
+            previous_layer_inds = tensor_index_matrix_new
+        end
+
+        # add y direction gates
+
+        if j % 2 == 0
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+            for j in 1:num_q_x  
+                for i in 1:Int(num_q_y/2)
+
+                    pair = [previous_layer_inds[j, i], previous_layer_inds[j, num_q_y-i+1]]
+                    id1 = popfirst!(unique_symbols)
+                    id2 = popfirst!(unique_symbols)
+                    push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                    tensor_index_matrix_new[j, i] = id1
+                    tensor_index_matrix_new[j, num_q_y-i+1] = id2
+                end
+            end
+            previous_layer_inds = tensor_index_matrix_new
+
+        end
+
+    end
+    
+    TN = Tenet.TensorNetwork(tensors_in_network)
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank > 3 #remove the bulk tesnors and replace them with new QR  tensors
+            pop!(TN, tensor)
+            Q, R = LinearAlgebra.qr(tensor, left_inds=inds(tensor)[1:2])
+            push!(TN, Q)
+            push!(TN, R)
+        end
+    
+    end
+
+    return TN
+
+end
+
+function generate_random_quantum_circuit_2d_4x4(num_q_x, num_q_y, layers, theta)
+    theta = rand(0,4*pi)
+
+    """
+    Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
+    and y directions.
+    Apply nearest neighbour 2 qubit gates --> x direction and y direction in a 
+    staggered fashion.
+    """
+
+    unique_symbols = [Symbol(i) for i in 1:1000]
+
+    initial_state = [1, 0]
+    tensors_in_network = []
+
+    previous_layer_inds = Matrix{Symbol}(undef, num_q_x, num_q_y)
+
+    # Initial state
+    for i in 1:num_q_x
+        for j in 1:num_q_y
+            id = popfirst!(unique_symbols)
+            push!(tensors_in_network, Tenet.Tensor(initial_state, [id]))
+            previous_layer_inds[i,j] = id
+        end
+    end
+
+
+    global x_count = 0 # staggering in x and y
+    global y_count = 0 # staggering in x and y
+
+    for l in 1:layers
+
+        # add x direction gates
+        if l % 2 == 1
+            if x_count % 2 == 0
+                datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+                tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+                for j in 1:num_q_y
+                    for i in 1:2:(num_q_x-1)
+                        pair = [previous_layer_inds[i, j], previous_layer_inds[i+1, j]]
+                        id1 = popfirst!(unique_symbols)
+                        id2 = popfirst!(unique_symbols)
+                        push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                        tensor_index_matrix_new[i, j] = id1
+                        tensor_index_matrix_new[i+1, j] = id2
+                    end
+                end
+                previous_layer_inds = tensor_index_matrix_new
+                x_count += 1
+            end
+
+            if x_count % 2 == 1
+                datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+                tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+                for j in 1:num_q_y
+                    for i in 1:Int(num_q_x/2)
+                        pair = [previous_layer_inds[i, j], previous_layer_inds[num_q_x-i+1, j]]
+                        id1 = popfirst!(unique_symbols)
+                        id2 = popfirst!(unique_symbols)
+                        push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                        tensor_index_matrix_new[i, j] = id1
+                        tensor_index_matrix_new[num_q_x-i+1, j] = id2
+                    end
+                end
+                previous_layer_inds = tensor_index_matrix_new
+                x_count += 1
+            end
+        end
+        # add y direction gates
+
+        if l % 2 == 0
+            if y_count % 2 == 0
+                datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+                tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+                for j in 1:num_q_x  
+                    for i in 1:Int(num_q_y/2)
+                        pair = [previous_layer_inds[j, i], previous_layer_inds[j, num_q_y-i+1]]
+                        id1 = popfirst!(unique_symbols)
+                        id2 = popfirst!(unique_symbols)
+                        push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                        tensor_index_matrix_new[j, i] = id1
+                        tensor_index_matrix_new[j, num_q_y-i+1] = id2
+                    end
+                end
+                previous_layer_inds = tensor_index_matrix_new
+
+                y_count += 1
+            end
+        
+
+            if y_count % 2 == 1
+                datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+                tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+                for j in 1:num_q_x  
+                    for i in 1:2:(num_q_y-1)
+                        pair = [previous_layer_inds[j, i], previous_layer_inds[j, i+1]]
+                        id1 = popfirst!(unique_symbols)
+                        id2 = popfirst!(unique_symbols)
+                        push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                        tensor_index_matrix_new[j, i] = id1
+                        tensor_index_matrix_new[j, i+1] = id2
+                    end
+                end
+                previous_layer_inds = tensor_index_matrix_new
+
+                y_count += 1
+            end
+
+        end
+
+        
+
+    end
+    
+    TN = Tenet.TensorNetwork(tensors_in_network)
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank > 3 #remove the bulk tesnors and replace them with new QR  tensors
+            pop!(TN, tensor)
+            Q, R = LinearAlgebra.qr(tensor, left_inds=inds(tensor)[1:2])
+            push!(TN, Q)
+            push!(TN, R)
+        end
+    
+    end
+
+    return TN
+
+end
+
+function select_pairs_and_collect_unused(matrix)
+    pairs = []
+    used_elements = []
+    list = vec(matrix)
+    # Create a list of all possible indices
+    indices = collect(1:length(list))
+    # Shuffle the indices to ensure randomness
+    shuffled_indices = shuffle(indices)
+
+    # Iterate over shuffled indices in pairs
+    for i in 1:2:length(shuffled_indices)-1
+        idx1 = shuffled_indices[i]
+        idx2 = shuffled_indices[i+1]
+        element1 = list[idx1]
+        element2 = list[idx2]
+        push!(pairs, [element1, element2])
+        # Store used elements to handle the odd cases
+        push!(used_elements, element1)
+        push!(used_elements, element2)
+    end
+
+    # Find unused elements in the original matrix
+    unused_elements = setdiff(vec(matrix), used_elements)
+
+    return pairs, unused_elements
+end
+
+function generate_random_quantum_circuit_2d_random_connections(num_q_x, num_q_y, layers, theta)
+    theta = rand(0,4*pi)
+
+    """
+    Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
+    and y directions.
+    Apply nearest neighbour 2 qubit gates --> x direction and y direction in a 
+    staggered fashion.
+    """
+
+    unique_symbols = [Symbol(i) for i in 1:1000]
+
+    initial_state = [1, 0]
+    tensors_in_network = []
+
+    previous_layer_inds = Matrix{Symbol}(undef, num_q_x, num_q_y)
+
+    # Initial state
+    for i in 1:num_q_x
+        for j in 1:num_q_y
+            id = popfirst!(unique_symbols)
+            push!(tensors_in_network, Tenet.Tensor(initial_state, [id]))
+            previous_layer_inds[i,j] = id
+        end
+    end    
+
+    for l in 1:layers
+        # add x direction gates
+        pairs, unused = select_pairs_and_collect_unused(previous_layer_inds)
+           
+        datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+        tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+        if length(unused) == 0
+            for pair in pairs
+                i1 = findfirst(x -> x == pair[1], previous_layer_inds)
+                i2 = findfirst(x -> x == pair[2], previous_layer_inds)
+                id1 = popfirst!(unique_symbols)
+                id2 = popfirst!(unique_symbols)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                tensor_index_matrix_new[i1] = id1
+                tensor_index_matrix_new[i2] = id2
+            end 
+            previous_layer_inds = tensor_index_matrix_new
+        end
+        if length(unused) == 1
+            for pair in pairs
+                i1 = findfirst(x -> x == pair[1], previous_layer_inds)
+                i2 = findfirst(x -> x == pair[2], previous_layer_inds)
+                id1 = popfirst!(unique_symbols)
+                id2 = popfirst!(unique_symbols)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                tensor_index_matrix_new[i1] = id1
+                tensor_index_matrix_new[i2] = id2
+            end 
+            i1 = findfirst(x -> x == unused[1], previous_layer_inds)
+            tensor_index_matrix_new[i1] = unused[1]
+            previous_layer_inds = tensor_index_matrix_new
+        end
+    end
+    
+    TN = Tenet.TensorNetwork(tensors_in_network)
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank > 3 #remove the bulk tesnors and replace them with new QR  tensors
+            pop!(TN, tensor)
+            Q, R = LinearAlgebra.qr(tensor, left_inds=inds(tensor)[1:2])
+            push!(TN, Q)
+            push!(TN, R)
+        end
+    
+    end
+
+    return TN
+
+end
+
+
+function generate_random_quantum_circuit_2d_2xn(num_q_x, num_q_y, layers, theta)
+    theta = rand(0,4*pi)
+
+    """
+    Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
+    and y directions.
+    Apply nearest neighbour 2 qubit gates --> x direction and y direction in a 
+    staggered fashion.
+    """
+
+    unique_symbols = [Symbol(i) for i in 1:1000]
+
+    initial_state = [1, 0]
+    tensors_in_network = []
+
+    previous_layer_inds = Matrix{Symbol}(undef, num_q_x, num_q_y)
+
+    # Initial state
+    for i in 1:num_q_x
+        for j in 1:num_q_y
+            id = popfirst!(unique_symbols)
+            push!(tensors_in_network, Tenet.Tensor(initial_state, [id]))
+            previous_layer_inds[i,j] = id
+        end
+    end
+
+    
+
+    for l in 1:layers
+
+        # first type of staggered gates
+
+        if l % 3 == 1
+            pairs = []
+            for j in 1:num_q_y
+                if j < num_q_y
+                    push!(pairs, [previous_layer_inds[1, j], previous_layer_inds[end, (j+1)]])
+                else
+                    push!(pairs, [previous_layer_inds[1, j], previous_layer_inds[end, 1]])
+                end
+            end
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+            for pair in pairs
+                i1 = findfirst(x -> x == pair[1], previous_layer_inds)
+                i2 = findfirst(x -> x == pair[2], previous_layer_inds)
+                id1 = popfirst!(unique_symbols)
+                id2 = popfirst!(unique_symbols)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                tensor_index_matrix_new[i1] = id1
+                tensor_index_matrix_new[i2] = id2
+            end
+            previous_layer_inds = tensor_index_matrix_new
+        end
+
+        if l % 3 == 2
+            pairs = []
+            for j in 1:num_q_y
+                push!(pairs, [previous_layer_inds[1, j], previous_layer_inds[end, (j)]])
+            end
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+            for pair in pairs
+                i1 = findfirst(x -> x == pair[1], previous_layer_inds)
+                i2 = findfirst(x -> x == pair[2], previous_layer_inds)
+                id1 = popfirst!(unique_symbols)
+                id2 = popfirst!(unique_symbols)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                tensor_index_matrix_new[i1] = id1
+                tensor_index_matrix_new[i2] = id2
+            end
+            previous_layer_inds = tensor_index_matrix_new
+        end
+
+
+        if l % 3 == 0
+            pairs = []
+            for j in 1:num_q_y
+                if j < num_q_y
+                    push!(pairs, [previous_layer_inds[1, j+1], previous_layer_inds[end, (j)]])
+                else
+                    push!(pairs, [previous_layer_inds[1, 1], previous_layer_inds[end, j]])
+                end
+            end
+            datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
+            tensor_index_matrix_new = Matrix{Symbol}(undef, num_q_x, num_q_y)
+            for pair in pairs
+                i1 = findfirst(x -> x == pair[1], previous_layer_inds)
+                i2 = findfirst(x -> x == pair[2], previous_layer_inds)
+                id1 = popfirst!(unique_symbols)
+                id2 = popfirst!(unique_symbols)
+                push!(tensors_in_network, tq_gt(rand(datas), pair, [id1, id2]))
+                tensor_index_matrix_new[i1] = id1
+                tensor_index_matrix_new[i2] = id2
+            end
+            previous_layer_inds = tensor_index_matrix_new
+        end
+        
+        
+    end
+    
+    global TN = Tenet.TensorNetwork(tensors_in_network)
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+        if rank > 3 #remove the bulk tesnors and replace them with new QR  tensors
+            pop!(TN, tensor)
+            Q, R = LinearAlgebra.qr(tensor, left_inds=inds(tensor)[1:2])
+            push!(TN, Q)
+            push!(TN, R)
+        end
+    
+    end
+
+    for tensor in Tenet.tensors(TN)
+        rank = length(inds(tensor))
+
+        if rank == 2
+            # prememtively contract one of the connecting indices
+            if inds(tensor)[1] ∈ inds(TN)
+                global TN = contraction_step(TN, [inds(tensor)[1]])
+            end
+            # trivertex netwrok structure
+        end
+    end
+
+  
+
+    return TN
+
+end
+
+
+function replace_index(tensor, replace_inds, new_inds)
+    
+    mapping = Dict(zip(replace_inds, new_inds))
+    #display(mapping)
+    current_inds = inds(tensor)
+    ids = []
+    for id in current_inds
+        if id in replace_inds
+            push!(ids, mapping[id])
+        else
+            push!(ids, id)
+        end
+    end
+    new_tensor = Tenet.Tensor(tensor.data, [ids...])
+    return new_tensor
+end
+
+
+function random_unitary_tensor_and_random_unitary_inverse(size1, size2, inserted_indices, new_inds, virtual_symbol)
+    groupsize = size1*size2
+    Q = Matrix{ComplexF64}(I, groupsize, groupsize)
+    group_inds = [id for id in [inserted_indices..., virtual_symbol]]
+    grouping = Tenet.Tensor(reshape(Q, (size1,size2,groupsize)), group_inds)
+    splitting = Tenet.Tensor(reshape(inv(Q), (groupsize,size1, size2)), [virtual_symbol, new_inds...])
+    id = Tenet.contract(grouping, splitting)
+    #println("Reshaped data is a correct Q^dag*Q = I ? ==> ", isapprox(reshape(id.data, (groupsize,groupsize)), I))
+    return grouping, splitting
+end
+
+
+function Tenet_loop_2_Tenet_MPS(loop, index_cycle, index_to_cut, printing = false)
+    global new_tn_tensors = []
+    global contract_list = []
+    global loop_size
+    global propagating_iso_index
+    global propagating_iso_split 
+    global loop_index_propagation
+
+    idx = findfirst(isequal(index_to_cut), index_cycle)
+    mps_cycle = vcat(index_cycle[idx+1:end], index_cycle[1:idx-1])
+    ordered_along_loop = collect_tensors_along_loop(loop, deepcopy(mps_cycle), index_to_cut)
+
+    contract_first = []                                                         # implement the memory vibrations!!!! scale it up to large networks
+    """
+    Walk along the loop and make the necessary alterations at each step
+    """
+    new_virtual_inds = [Symbol("v$i") for i in 1:100]
+    collect_virtual = []
+    
+    for (i, tensor) in enumerate(ordered_along_loop)
+        if printing == true
+            println("________________________Working on step = $i"*"_______________________________________")
+            println(" Tensor $i  => ", inds(tensor), "with sizes", [size(tensor, id) for id in inds(tensor)])
+        end
+
+        # cases on the edges of the loop are treated seperately
+        if i == 1
+            global loop_size = [size(tensor, id) for id in inds(tensor) if id == Symbol(index_to_cut)][1]
+            global loop_index_propagation = Symbol(index_to_cut)
+            current_inds = inds(tensor)
+            dangling_leg = setdiff(inds(tensor), [Symbol(id) for id in index_cycle])
+            next_group_leg = setdiff(inds(tensor), [loop_index_propagation, dangling_leg[1]])[1]
+            grouplegs = [loop_index_propagation, next_group_leg]            
+            grouplegs_new = Symbol.(string.(grouplegs) .*repeat("_", i))
+            new_t = replace_index(tensor, grouplegs, grouplegs_new)
+            tensor_id = setdiff(inds(tensor), [Symbol(index_to_cut), dangling_leg[1]])[1]
+            global propagating_iso_index = tensor_id
+            tensor_size = size(tensor, tensor_id)
+            grouping, splitting = random_unitary_tensor_and_random_unitary_inverse(loop_size, tensor_size, grouplegs_new, grouplegs, new_virtual_inds[i])
+            push!(collect_virtual, new_virtual_inds[i])
+            global propagating_iso_split = splitting
+
+            if printing == true
+                println("new_t = ", inds(new_t), "with sizes", [size(new_t, id) for id in inds(new_t)])
+                println("grouping = ", inds(grouping), "with sizes", [size(grouping, id) for id in inds(grouping)])
+            end
+
+            push!(new_tn_tensors, new_t)
+            push!(new_tn_tensors, grouping)
+    
+            continue
+        end
+    
+    
+        # general bulk case
+        if 1 < i < length(ordered_along_loop)
+            
+            current_inds = inds(tensor)
+            dangling_leg = setdiff(inds(tensor), [Symbol(id) for id in index_cycle])
+            next_group_leg = setdiff(inds(tensor), [propagating_iso_index, dangling_leg[1]])[1]
+            tensor_size = size(tensor, next_group_leg)
+            
+            grouplegs = [loop_index_propagation, next_group_leg]
+            grouplegs_new = Symbol.(string.(grouplegs) .*repeat("_", i))
+            push!(contract_first, grouplegs_new[2])
+            new_t = replace_index(tensor, grouplegs, grouplegs_new)
+            new_split = replace_index(propagating_iso_split, grouplegs, grouplegs_new)
+    
+            grouping, splitting = random_unitary_tensor_and_random_unitary_inverse(loop_size, tensor_size, grouplegs_new, grouplegs, new_virtual_inds[i])
+
+            if printing == true
+                println("new_split =", inds(new_split), "with sizes", [size(new_split, id) for id in inds(new_split)] )
+                println("new_t = ", inds(new_t), "with sizes", [size(new_t, id) for id in inds(new_t)])
+                println("grouping = ", inds(grouping), "with sizes", [size(grouping, id) for id in inds(grouping)])            
+            end
+
+            push!(new_tn_tensors, new_split)
+            push!(new_tn_tensors, new_t)
+            push!(new_tn_tensors, grouping)
+            global propagating_iso_split = splitting
+            global propagating_iso_index = next_group_leg
+            push!(collect_virtual, new_virtual_inds[i])
+    
+            continue
+        end
+    
+        if i == length(ordered_along_loop)
+            push!(new_tn_tensors, propagating_iso_split)
+            push!(new_tn_tensors, tensor)
+        end
+    
+    end
+
+    
+    
+    mps_network = Tenet.TensorNetwork(new_tn_tensors)
+    contraction_list = inds(mps_network, :inner)
+       
+    contract_list = vcat(contract_first, setdiff(contraction_list, collect_virtual))
+    ##UNFORTUNATELY NO POSSIBILITY TO ADD THIS IN  AN OPTIMIZED MANNER............
+    for id in contract_list
+        if id ∈ inds(mps_network)
+            contraction_step(mps_network, id)
+        end
+    end
+    println("after mps contraction current_mem_usage = ", current_mem_usage)
+
+   
+    return mps_network, collect_virtual
+end
+
+
+function modify_approx_sizes_schimdt_compatible(approximate_sizes) 
+    new_approximate_sizes_list = []
+    new_approximate_sizes_list2 = []
+
+    global sizepropagator = 0
+
+    for size in approximate_sizes
+        
+        R, ph, L = size
+        if sizepropagator != 0
+            R = sizepropagator
+        end
+
+        if L > R*ph
+            push!(new_approximate_sizes_list, (R, ph, R*ph))
+            global sizepropagator = R*ph
+        else
+            push!(new_approximate_sizes_list, (R, ph, L))
+            global sizepropagator = 0
+        end
+    end
+
+    global sizepropagator = 0
+
+    for size in reverse(new_approximate_sizes_list)
+        R, ph, L = size
+
+        if sizepropagator != 0
+            L = sizepropagator
+        end
+
+        if R > L*ph
+            push!(new_approximate_sizes_list2, (L*ph, ph, L))
+            global sizepropagator = L*ph
+        else
+            push!(new_approximate_sizes_list2, (R, ph, L))
+            global sizepropagator = 0
+        end
+    end
+
+
+    return reverse(new_approximate_sizes_list2)
+end
+
+
+
+
+
+
+
+
+
+
+    
