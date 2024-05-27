@@ -1,4 +1,4 @@
-# Folder 
+# Folder DMRG approximate trees
 
 The final algorithm for extracting approximate TTNs from a random quantum circuit
 
