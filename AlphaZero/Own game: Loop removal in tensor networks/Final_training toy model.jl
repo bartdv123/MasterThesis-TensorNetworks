@@ -9,7 +9,7 @@ include("julia_functions.jl")                                                   
 #include("game_v4_graph in env.jl")
 #include("game_v4_graph not in env copy.jl")
 include("Final_discussed_toy_model.jl")
-include("params1.jl")
+include("params.jl")
 
 
 # Then, pass it to the experiment initialization:

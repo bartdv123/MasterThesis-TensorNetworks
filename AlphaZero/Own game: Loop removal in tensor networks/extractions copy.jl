@@ -56,8 +56,8 @@ p2 = AlphaZero = NetworkPlayer(AlphaZero.Network.copy(Ses.env.bestnn, on_gpu=fal
 Ses = Session(experiment)
 gspec = Ses.env.gspec
 
-Random_rewards = []
-Random_average_lengths = []
+NN_rewards = []
+NN_average_lengths = []
 
 num_games = 100
 
@@ -77,12 +77,12 @@ for game in 1:num_games
     rewards_list2 = last(trace.states).reward_list
     reward2 =  sum(rewards_list2)
 
-    push!(Random_rewards, reward2)
-    push!(Random_average_lengths, sum(loop_size2)/11)
+    push!(NN_rewards, reward2)
+    push!(NN_average_lengths, sum(loop_size2)/11)
 end
 
-println("random rewards = ", mean(Random_rewards))
-println("random average length = ", mean(Random_average_lengths))
+println("NN rewards = ", mean(NN_rewards))
+println("NN average length = ", mean(NN_average_lengths))
 
 
 

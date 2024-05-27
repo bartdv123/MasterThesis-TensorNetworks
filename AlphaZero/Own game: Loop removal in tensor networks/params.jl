@@ -14,10 +14,10 @@ netparams = NetLib.ResNetHP(
 
 self_play = SelfPlayParams(
   sim=SimParams(
-    num_games=1000,
+    num_games=600,
     num_workers=128,
     batch_size=64,
-    use_gpu=true,
+    use_gpu=false,
     reset_every=2,
     flip_probability=0.,
     alternate_colors=false),
@@ -34,7 +34,7 @@ arena = ArenaParams(
     num_games=50,
     num_workers=50,
     batch_size=50,
-    use_gpu=true,
+    use_gpu=false,
     reset_every=2,
     flip_probability=0.,
     alternate_colors=false),
@@ -45,25 +45,25 @@ arena = ArenaParams(
   update_threshold=50000)
 
 learning = LearningParams(
-  use_gpu=true,
+  use_gpu=512,
   use_position_averaging=true,
   samples_weighing_policy=LOG_WEIGHT,
-  batch_size=1024,
-  loss_computation_batch_size=1024,
-  optimiser=Adam(lr=2e-3),
+  batch_size=512,
+  loss_computation_batch_size=512,
+  optimiser=Adam(lr=1e-1),
   l2_regularization=1e-4,
   nonvalidity_penalty=1.,
   min_checkpoints_per_epoch=1,
-  max_batches_per_checkpoint=1024,
+  max_batches_per_checkpoint=512,
   num_checkpoints=1)
 
 params = Params(
   arena=arena,
   self_play=self_play,
   learning=learning,
-  num_iters=15,
-  ternary_outcome=true,
-  use_symmetries=true,
+  num_iters=3,
+  ternary_outcome=false,
+  use_symmetries=false,
   memory_analysis=nothing,
   mem_buffer_size=PLSchedule(
   [      0,        15],
@@ -76,7 +76,8 @@ params = Params(
 
 alphazero_player = Benchmark.Full(arena.mcts)
 network_player = Benchmark.NetworkOnly(τ=0.5)
-  
+
+# benchmark the network only again the full agent
 benchmark_sim = SimParams(
     arena.sim;
     num_games=50,
