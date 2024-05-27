@@ -1600,7 +1600,7 @@ end
 
 function generate_random_quantum_circuit(num_q, layers, theta)
     #symbols from 1 - 1000
-    theta = rand(0,4*pi)
+    theta = rand(0.,4*pi)
     unique_symbols = [Symbol(i) for i in 1:1000]
     # prep_z state for the initial_state: all qubits in |0>
     initial_state = [1, 0]

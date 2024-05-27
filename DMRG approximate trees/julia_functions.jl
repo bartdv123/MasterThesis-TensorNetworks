@@ -1600,7 +1600,7 @@ end
 
 function generate_random_quantum_circuit(num_q, layers, theta)
     #symbols from 1 - 1000
-    theta = rand(0,4*pi)
+    theta = rand((0.,4*pi))
     unique_symbols = [Symbol(i) for i in 1:1000]
     # prep_z state for the initial_state: all qubits in |0>
     initial_state = [1, 0]
@@ -1676,7 +1676,7 @@ function generate_random_quantum_circuit(num_q, layers, theta)
 end
 
 function generate_random_quantum_circuit_2d_2x2(num_q_x, num_q_y, layers, theta)
-    theta = rand(0,4*pi)
+    theta = rand((0.,4*pi))
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
@@ -1764,7 +1764,7 @@ function generate_random_quantum_circuit_2d_2x2(num_q_x, num_q_y, layers, theta)
 end
 
 function generate_random_quantum_circuit_2d_4x4(num_q_x, num_q_y, layers, theta)
-    theta = rand(0,4*pi)
+    theta = rand((0.,4*pi))
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
@@ -1922,7 +1922,7 @@ function select_pairs_and_collect_unused(matrix)
 end
 
 function generate_random_quantum_circuit_2d_random_connections(num_q_x, num_q_y, layers, theta)
-    theta = rand(0,4*pi)
+    theta = rand((0.,4*pi))
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
@@ -2000,7 +2000,7 @@ end
 
 
 function generate_random_quantum_circuit_2d_2xn(num_q_x, num_q_y, layers, theta)
-    theta = rand(0,4*pi)
+    theta = rand((0.,4*pi))
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
