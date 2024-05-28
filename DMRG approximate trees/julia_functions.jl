@@ -1500,10 +1500,9 @@ function Trivertex_classical_ising_partition_function(Nx::Int, Ny::Int, beta, pl
         rank = length(inds(tensor))
         if rank > 3 #remove the bulk tesnors and replace them with new SVD-ed tensors
             pop!(ising_network, tensor)
-            U,S,V = LinearAlgebra.svd(tensor, left_inds=inds(tensor)[1:2])
-            push!(ising_network, U)
-            push!(ising_network, S)
-            push!(ising_network, V)
+            Q,R = LinearAlgebra.qr(tensor, left_inds=inds(tensor)[1:2])
+            push!(ising_network, Q)
+            push!(ising_network, R)
         end
     end
 
@@ -1599,8 +1598,6 @@ function tq_gt(input_data, index_in, index_out)
 end
 
 function generate_random_quantum_circuit(num_q, layers, theta)
-    #symbols from 1 - 1000
-    theta = rand((0.,4*pi))
     unique_symbols = [Symbol(i) for i in 1:1000]
     # prep_z state for the initial_state: all qubits in |0>
     initial_state = [1, 0]
@@ -1611,6 +1608,9 @@ function generate_random_quantum_circuit(num_q, layers, theta)
     previous_layer_inds = [inds(tensor)[1] for tensor in tensors_in_network[end-num_q+1:end]]
     
     for j in 1:layers
+            #symbols from 1 - 1000
+    theta = rand((0.,4*pi))
+
         # add a layer of two qubit tensors entangling all pairs
         if j % 2 == 1
             datas = [xx_interaction(theta), yy_interaction(theta), zz_interaction(theta)]
@@ -1676,7 +1676,6 @@ function generate_random_quantum_circuit(num_q, layers, theta)
 end
 
 function generate_random_quantum_circuit_2d_2x2(num_q_x, num_q_y, layers, theta)
-    theta = rand((0.,4*pi))
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
@@ -1704,6 +1703,8 @@ function generate_random_quantum_circuit_2d_2x2(num_q_x, num_q_y, layers, theta)
 
 
     for j in 1:layers
+        theta = rand((0.,4*pi))
+
         # println("working on layer $j")
         # add x direction gates
 
@@ -1764,7 +1765,6 @@ function generate_random_quantum_circuit_2d_2x2(num_q_x, num_q_y, layers, theta)
 end
 
 function generate_random_quantum_circuit_2d_4x4(num_q_x, num_q_y, layers, theta)
-    theta = rand((0.,4*pi))
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
@@ -1794,6 +1794,7 @@ function generate_random_quantum_circuit_2d_4x4(num_q_x, num_q_y, layers, theta)
     global y_count = 0 # staggering in x and y
 
     for l in 1:layers
+        theta = rand((0.,4*pi))
 
         # add x direction gates
         if l % 2 == 1
@@ -1922,7 +1923,6 @@ function select_pairs_and_collect_unused(matrix)
 end
 
 function generate_random_quantum_circuit_2d_random_connections(num_q_x, num_q_y, layers, theta)
-    theta = rand((0.,4*pi))
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
@@ -1948,6 +1948,8 @@ function generate_random_quantum_circuit_2d_random_connections(num_q_x, num_q_y,
     end    
 
     for l in 1:layers
+        theta = rand((0.,4*pi))
+
         # add x direction gates
         pairs, unused = select_pairs_and_collect_unused(previous_layer_inds)
            
@@ -2000,7 +2002,7 @@ end
 
 
 function generate_random_quantum_circuit_2d_2xn(num_q_x, num_q_y, layers, theta)
-    theta = rand((0.,4*pi))
+    
 
     """
     Generate a random 2D quantum circuit --> num_qx,y == amount qubits in the x 
@@ -2028,7 +2030,7 @@ function generate_random_quantum_circuit_2d_2xn(num_q_x, num_q_y, layers, theta)
     
 
     for l in 1:layers
-
+        theta = rand((0.,4*pi))
         # first type of staggered gates
 
         if l % 3 == 1
